@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "test": "deno test -A open-brain-mcp/tests/",
+    "test:telegram": "deno test -A telegram-bot/tests/",
+    "test:all": "deno test -A open-brain-mcp/tests/ telegram-bot/tests/"
+  }
+}
