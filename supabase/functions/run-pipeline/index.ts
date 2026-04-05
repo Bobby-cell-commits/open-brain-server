@@ -5,6 +5,7 @@
 import { supabaseAdmin } from "../_shared/supabase-client.ts";
 import { chatCompletion, generateEmbedding } from "../_shared/openrouter.ts";
 import { errorResponse } from "../_shared/errors.ts";
+import { VALID_THEMES } from "../_shared/types.ts";
 import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
 import { dreamDecay } from "../_shared/dream-decay.ts";
@@ -22,6 +23,8 @@ const RSS_FEEDS: Record<string, string> = {
   "Ahead of AI": "https://magazine.sebastianraschka.com/feed",
   "Interconnects": "https://www.interconnects.ai/feed",
   "Decoding AI": "https://www.decodingai.com/feed",
+  "The AI Engineer": "https://theaiengineer.substack.com/feed",
+  "Turing Post": "https://turingpost.substack.com/feed",
 };
 
 // --- HF Papers Config ---
@@ -244,7 +247,7 @@ interface CombinedResult {
 const METADATA_FALLBACK: Record<string, unknown> = {
   type: "observation",
   relevance: "",
-  theme: "learning",
+  theme: "personal",
   topics: [],
   entities: [],
   quality: 0.5,
@@ -268,7 +271,7 @@ async function combinedTriageAndExtract(content: string, imageUrl?: string): Pro
     const metadata: Record<string, unknown> = {
       type: typeof parsed.type === "string" ? parsed.type : METADATA_FALLBACK.type,
       relevance: typeof parsed.relevance === "string" ? parsed.relevance : METADATA_FALLBACK.relevance,
-      theme: typeof parsed.theme === "string" ? parsed.theme : METADATA_FALLBACK.theme,
+      theme: typeof parsed.theme === "string" && (VALID_THEMES as readonly string[]).includes(parsed.theme) ? parsed.theme : "personal",
       topics: Array.isArray(parsed.topics) ? parsed.topics : triage.key_topics,
       entities: Array.isArray(parsed.entities) ? parsed.entities : [],
       quality: typeof parsed.quality === "number" ? parsed.quality : 0.5,

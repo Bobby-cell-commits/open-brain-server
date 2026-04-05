@@ -67,12 +67,18 @@ export interface EntityResult {
   thought_count: number;
 }
 
+export const VALID_THEMES = [
+  "ml-research", "developer-experience", "side-projects", "ai-coding-tools",
+  "industry-trends", "personal", "knowledge-systems", "infrastructure",
+] as const;
+
 /** Validate and fill missing fields on LLM-extracted metadata. */
 export function validateMetadata(raw: Record<string, unknown>): ThoughtMetadata {
+  const rawTheme = typeof raw.theme === "string" ? raw.theme : "";
   return {
     type: typeof raw.type === "string" ? raw.type : "observation",
     relevance: typeof raw.relevance === "string" ? raw.relevance : "",
-    theme: typeof raw.theme === "string" ? raw.theme : "personal",
+    theme: (VALID_THEMES as readonly string[]).includes(rawTheme) ? rawTheme : "personal",
     topics: Array.isArray(raw.topics) ? raw.topics : [],
     entities: Array.isArray(raw.entities) ? raw.entities : [],
     quality: typeof raw.quality === "number" ? raw.quality : 0.5,
