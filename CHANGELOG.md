@@ -6,6 +6,15 @@ When upgrading, apply new migrations with `supabase db push --linked` from the `
 
 ## [Unreleased]
 
+## 2026-04-05b
+
+### Fixed
+- **Theme controlled vocabulary enforcement.** Metadata extraction now validates themes against the 8-value controlled vocabulary (`ml-research`, `developer-experience`, `side-projects`, `ai-coding-tools`, `industry-trends`, `personal`, `knowledge-systems`, `infrastructure`). Invalid themes default to `personal`. Previously, LLM could invent arbitrary themes (e.g. "learning", "cybersecurity") with no server-side validation.
+- Pipeline metadata fallback theme changed from invalid `"learning"` to `"personal"`.
+
+### No migrations required
+This is a code-only fix in `_shared/types.ts` and `run-pipeline/index.ts`. Redeploy Edge Functions to apply.
+
 ## 2026-04-05
 
 ### Added
