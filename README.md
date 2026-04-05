@@ -105,6 +105,7 @@ To add your own source, implement a fetcher that calls `capture_thought` via the
 - OpenRouter embedding costs ~$0.001 per thought (text-embedding-3-small)
 - All Edge Functions are stateless -- no servers to manage
 - Pipeline scheduling via GitHub Actions cron (free for public repos)
+- GitHub Actions workflows need two repo secrets: `SUPABASE_FUNCTIONS_URL` (e.g. `https://<ref>.supabase.co/functions/v1`) and `MCP_ACCESS_KEY`
 - Embedding dimension is 1536 (OpenAI text-embedding-3-small via OpenRouter)
 
 ## Security
