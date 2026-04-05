@@ -31,8 +31,8 @@ const TEST_MESSAGE: TelegramMessage = {
 const _originalDeps = { ..._deps };
 
 function stubOpenRouter() {
-  _deps.generateEmbedding = async () => FAKE_EMBEDDING;
-  _deps.chatCompletion = async () => FAKE_METADATA;
+  _deps.generateEmbedding = () => Promise.resolve(FAKE_EMBEDDING);
+  _deps.chatCompletion = () => Promise.resolve(FAKE_METADATA);
 }
 
 function restoreOpenRouter() {
@@ -159,8 +159,8 @@ Deno.test("handleCapture enforces quality floor of 0.6 for telegram", async () =
   });
 
   mockFetch();
-  _deps.generateEmbedding = async () => FAKE_EMBEDDING;
-  _deps.chatCompletion = async () => LOW_QUALITY_METADATA;
+  _deps.generateEmbedding = () => Promise.resolve(FAKE_EMBEDDING);
+  _deps.chatCompletion = () => Promise.resolve(LOW_QUALITY_METADATA);
 
   // Stub rpc (dedup + entities)
   stubRpc(supabaseAdmin, (name: string) => {

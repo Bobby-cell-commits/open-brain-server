@@ -40,6 +40,19 @@ export interface DreamDedupResult {
   deleted: number;
 }
 
+export interface DreamDecayResult {
+  scored: number;
+  tier1_candidates: number;
+  tier1_archived: number;
+  tier1_kept: number;
+  tier2_candidates: number;
+  tier2_archived: number;
+  tier2_kept: number;
+  tier3_flagged: number;
+  sole_entity_protected: number;
+  pending_review: number;
+}
+
 export interface EntityMention {
   name: string;
   type: "person" | "project" | "tool" | "organization";

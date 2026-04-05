@@ -1,7 +1,7 @@
 // auto-link-typing: Tests connection typing logic in storeConnections.
 
 import { assertEquals } from "jsr:@std/assert";
-import { createMockMcp, stubRpc, stubFrom, mockChain, restore, TEST_BRAIN_ID } from "./_helpers.ts";
+import { stubRpc, stubFrom, mockChain, restore, TEST_BRAIN_ID } from "./_helpers.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
 
 // We need to mock chatCompletion for connection typing.
@@ -62,9 +62,9 @@ Deno.test("storeConnections calls LLM to classify connections at 0.80+", async (
 
   // Stub chatCompletion via _deps (ESM-safe mutable indirection)
   const origChat = _deps.chatCompletion;
-  _deps.chatCompletion = async () => {
+  _deps.chatCompletion = () => {
     chatCalled = true;
-    return JSON.stringify({ link_type: "extends", reason: "builds on indexing discussion" });
+    return Promise.resolve(JSON.stringify({ link_type: "extends", reason: "builds on indexing discussion" }));
   };
 
   try {
@@ -99,7 +99,7 @@ Deno.test("storeConnections falls back to 'related' if LLM typing fails", async 
   }));
 
   const origChat = _deps.chatCompletion;
-  _deps.chatCompletion = async () => {
+  _deps.chatCompletion = () => {
     throw new Error("OpenRouter timeout");
   };
 

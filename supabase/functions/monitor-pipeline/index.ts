@@ -45,17 +45,10 @@ function sourceStatus(health: SourceHealth): "healthy" | "warning" | "critical" 
   return "healthy";
 }
 
-function overallStatus(sources: SourceHealth[], alerts: Alert[]): "healthy" | "degraded" | "critical" {
+function overallStatus(_sources: SourceHealth[], alerts: Alert[]): "healthy" | "degraded" | "critical" {
   if (alerts.some((a) => a.severity === "critical")) return "critical";
   if (alerts.length > 0) return "degraded";
   return "healthy";
-}
-
-function formatHoursAgo(hours: number | null): string {
-  if (hours === null) return "never";
-  if (hours < 1) return `${Math.round(hours * 60)}m ago`;
-  if (hours < 48) return `${Math.round(hours)}h ago`;
-  return `${(hours / 24).toFixed(1)}d ago`;
 }
 
 function formatAlertMessage(alert: Alert, health: SourceHealth | undefined): string {

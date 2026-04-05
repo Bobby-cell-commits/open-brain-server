@@ -102,8 +102,8 @@ Deno.test(
     // Stub capture handler's _deps (not the openrouter module directly)
     const { _deps } = await import("../handlers/capture.ts");
     const origDeps = { ..._deps };
-    _deps.generateEmbedding = async () => Array(1536).fill(0.1);
-    _deps.chatCompletion = async () => JSON.stringify({
+    _deps.generateEmbedding = () => Promise.resolve(Array(1536).fill(0.1));
+    _deps.chatCompletion = () => Promise.resolve(JSON.stringify({
       type: "idea",
       topics: ["test"],
       people: [],
@@ -113,7 +113,7 @@ Deno.test(
       relevance: "test",
       quality: 0.5,
       entities: [],
-    });
+    }));
 
     const { supabaseAdmin } = await import("../../_shared/supabase-client.ts");
     const { mockChain, stubRpc, stubFrom, restore } = await import(

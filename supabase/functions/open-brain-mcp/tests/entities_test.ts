@@ -3,7 +3,7 @@
 import "./_helpers.ts";
 import { assertEquals } from "jsr:@std/assert";
 import type { EntityMention } from "../../_shared/types.ts";
-import { createMockMcp, stubRpc, restore, TEST_BRAIN_ID } from "./_helpers.ts";
+import { stubRpc, restore, TEST_BRAIN_ID } from "./_helpers.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
 import { resolveEntities } from "../../_shared/entities.ts";
 

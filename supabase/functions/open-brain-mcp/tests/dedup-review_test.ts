@@ -1,7 +1,7 @@
 // dedup_review: Tests parallel RPC calls, combined result, and client-side limit slicing.
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
-import { createMockMcp, mockChain, stubRpc, restore, mockCtx, TEST_BRAIN_ID } from "./_helpers.ts";
+import { createMockMcp, mockChain, stubRpc, restore, mockCtx } from "./_helpers.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
 import { registerDedupReview } from "../tools/dedup-review.ts";
 import * as z from "npm:zod@3";

@@ -23,6 +23,8 @@ import { registerDedupReview } from "./tools/dedup-review.ts";
 import { registerRefreshSalience } from "./tools/refresh-salience.ts";
 import { registerListEntities } from "./tools/list-entities.ts";
 import { registerSerendipityDigest } from "./tools/serendipity-digest.ts";
+import { registerPipeline } from "./tools/pipeline.ts";
+import { registerReviewStale } from "./tools/review-stale.ts";
 import { registerAdminRoutes } from "./admin-routes.ts";
 
 // ---------------------------------------------------------------------------
@@ -66,7 +68,7 @@ function createMcpServer(): McpServer {
     schemaAdapter: (schema) => zodToJsonSchema(schema as z.ZodType),
   });
 
-  // Register all 14 tools
+  // Register all 16 tools
   registerSearchThoughts(mcp, z);
   registerListThoughts(mcp, z);
   registerThoughtStats(mcp, z);
@@ -81,6 +83,8 @@ function createMcpServer(): McpServer {
   registerRefreshSalience(mcp, z);
   registerListEntities(mcp, z);
   registerSerendipityDigest(mcp, z);
+  registerPipeline(mcp, z);
+  registerReviewStale(mcp, z);
 
   return mcp;
 }

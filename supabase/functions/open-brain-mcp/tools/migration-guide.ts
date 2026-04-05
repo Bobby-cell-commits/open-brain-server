@@ -204,7 +204,7 @@ export function registerMigrationGuide(mcp: McpServer, z: Z): void {
           "Source platform: notion, obsidian, claude-web, claude-code, or any other platform name",
         ),
     }),
-    handler: async (args: { platform: string }, _ctx: any) => {
+    handler: (args: { platform: string }, _ctx: any) => {
       try {
         const normalized = args.platform.toLowerCase().trim();
         const guides = getGuides();

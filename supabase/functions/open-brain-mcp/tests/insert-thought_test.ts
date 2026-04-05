@@ -1,7 +1,7 @@
 // insert-thought: Tests shared insert function.
 
 import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { mockChain, stubFrom, restore } from "./_helpers.ts";
+import { stubFrom, restore } from "./_helpers.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
 import { insertThought } from "../../_shared/insert-thought.ts";
 

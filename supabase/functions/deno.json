@@ -1,4 +1,13 @@
 {
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-import-prefix",
+        "no-unversioned-import"
+      ]
+    }
+  },
   "tasks": {
     "test": "deno test -A open-brain-mcp/tests/",
     "test:telegram": "deno test -A telegram-bot/tests/",
