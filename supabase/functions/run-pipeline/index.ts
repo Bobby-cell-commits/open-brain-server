@@ -7,6 +7,7 @@ import { chatCompletion, generateEmbedding } from "../_shared/openrouter.ts";
 import { errorResponse } from "../_shared/errors.ts";
 import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
+import { dreamDecay } from "../_shared/dream-decay.ts";
 import { resolveEntities } from "../_shared/entities.ts";
 import { insertThought } from "../_shared/insert-thought.ts";
 
@@ -808,6 +809,7 @@ Deno.serve(async (req) => {
   let source = "all";
   let runDreamDedup = false;
   let dreamScanDays: number | undefined;
+  let runDreamDecay = false;
   try {
     const body = await req.json();
     if (body.source && typeof body.source === "string") {
@@ -818,6 +820,9 @@ Deno.serve(async (req) => {
     }
     if (typeof body.scan_days === "number" && body.scan_days > 0) {
       dreamScanDays = body.scan_days;
+    }
+    if (body.dream_decay === true) {
+      runDreamDecay = true;
     }
   } catch {
     // Empty body or invalid JSON — default to "all"
@@ -891,6 +896,20 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Dream Cycle Phase D: automated staleness detection & archival (opt-in via dream_decay:true)
+  let dreamDecayResult = null;
+  if (runDreamDecay) {
+    try {
+      dreamDecayResult = await dreamDecay(OWNER_BRAIN_ID);
+      const archived = dreamDecayResult.tier1_archived + dreamDecayResult.tier2_archived;
+      if (archived > 0) {
+        console.log(`Dream decay: archived ${archived} stale thought(s)`);
+      }
+    } catch (e) {
+      console.error(`Dream decay failed: ${e}`);
+    }
+  }
+
   // --- Pipeline run logging ---
   const executionMs = Date.now() - runStartTime;
   const hasErrors = Object.keys(sources).some((k) => k.endsWith("_error"));
@@ -925,6 +944,7 @@ Deno.serve(async (req) => {
       p_source_details: sources,
       p_salience_refreshed: salienceRefreshed,
       p_dream_dedup: dreamDedupResult,
+      p_dream_decay: dreamDecayResult,
       p_execution_ms: executionMs,
     });
   } catch (logErr) {
@@ -941,6 +961,7 @@ Deno.serve(async (req) => {
       sources,
       salience_refreshed: salienceRefreshed,
       dream_dedup: dreamDedupResult,
+      dream_decay: dreamDecayResult,
       timestamp: new Date().toISOString(),
     }),
     { headers: { "Content-Type": "application/json" } },
