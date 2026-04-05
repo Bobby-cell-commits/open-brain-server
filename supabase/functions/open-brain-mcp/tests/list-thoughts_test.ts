@@ -49,7 +49,7 @@ Deno.test("db error returns isError", async () => {
 Deno.test("respects limit parameter", async () => {
   const data = [{ id: "1" }, { id: "2" }, { id: "3" }];
   let capturedLimit: number | undefined;
-  let eqCalls: any[][] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     // Track calls through the chain
@@ -78,7 +78,7 @@ Deno.test("respects limit parameter", async () => {
 
 Deno.test("type filter applies correct JSONB filter", async () => {
   let filterArgs: any[] = [];
-  let eqCalls: any[][] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -145,8 +145,8 @@ Deno.test("does not fire increment_access_count for empty results", async () => 
 });
 
 Deno.test("orders by salience DESC then created_at DESC", async () => {
-  let capturedOrder: { column: string; ascending: boolean }[] = [];
-  let eqCalls: any[][] = [];
+  const capturedOrder: { column: string; ascending: boolean }[] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -177,8 +177,8 @@ Deno.test("orders by salience DESC then created_at DESC", async () => {
 });
 
 Deno.test("min_quality default 0.4 applies quality filter", async () => {
-  let gteCalls: any[][] = [];
-  let eqCalls: any[][] = [];
+  const gteCalls: any[][] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -203,8 +203,8 @@ Deno.test("min_quality default 0.4 applies quality filter", async () => {
 });
 
 Deno.test("min_quality=0 applies filter with zero (passes everything)", async () => {
-  let gteCalls: any[][] = [];
-  let eqCalls: any[][] = [];
+  const gteCalls: any[][] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -229,8 +229,8 @@ Deno.test("min_quality=0 applies filter with zero (passes everything)", async ()
 });
 
 Deno.test("theme filter applies correct JSONB filter", async () => {
-  let filterCalls: any[][] = [];
-  let eqCalls: any[][] = [];
+  const filterCalls: any[][] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -256,7 +256,7 @@ Deno.test("theme filter applies correct JSONB filter", async () => {
 });
 
 Deno.test("source filter applies correct equality filter", async () => {
-  let eqCalls: any[][] = [];
+  const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -283,7 +283,7 @@ Deno.test("source filter applies correct equality filter", async () => {
 });
 
 Deno.test("since filter applies gte on created_at with ISO timestamp", async () => {
-  let gteCalls: any[][] = [];
+  const gteCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -308,7 +308,7 @@ Deno.test("since filter applies gte on created_at with ISO timestamp", async () 
 });
 
 Deno.test("since takes precedence over days when both provided", async () => {
-  let gteCalls: any[][] = [];
+  const gteCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {

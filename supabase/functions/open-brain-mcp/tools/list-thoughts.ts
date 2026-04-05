@@ -83,9 +83,11 @@ export function registerListThoughts(mcp: McpServer, z: Z): void {
           query = query.filter("metadata->>theme", "eq", args.theme);
         }
 
-        // Quality filter: JSONB numeric extraction
-        if (args.min_quality !== undefined) {
-          query = query.gte("metadata->>quality", args.min_quality.toString());
+        // Quality filter: intentional sources (telegram, mcp) bypass the gate
+        if (args.min_quality !== undefined && args.min_quality > 0) {
+          query = query.or(
+            `source.in.(telegram,mcp),metadata->>quality.gte.${args.min_quality}`
+          );
         }
 
         // Time window filter: since takes precedence over days
