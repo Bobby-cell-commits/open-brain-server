@@ -2,7 +2,7 @@
 
 Self-hostable MCP memory server for AI assistants.
 
-Open Brain is an MCP server that gives any AI assistant persistent, searchable memory. It provides 14 tools for capturing, searching, and analyzing thoughts with hybrid search (BM25 + pgvector), automatic deduplication, entity extraction, connection graphing, and salience-based ranking. Multi-tenant by design -- each API key maps to an isolated brain. Includes pipeline templates for automated ingestion from Reddit, RSS feeds, Hugging Face Papers, and Emergent Mind.
+Open Brain is an MCP server that gives any AI assistant persistent, searchable memory. It provides 16 tools for capturing, searching, and analyzing thoughts with hybrid search (BM25 + pgvector), automatic deduplication, entity extraction, connection graphing, salience-based ranking, and automated staleness pruning. Multi-tenant by design -- each API key maps to an isolated brain. Includes pipeline templates for automated ingestion from Reddit, RSS feeds, Hugging Face Papers, and Emergent Mind.
 
 ## Architecture
 
@@ -51,6 +51,7 @@ supabase secrets set --env-file .env.local
 supabase functions deploy open-brain-mcp --no-verify-jwt
 supabase functions deploy telegram-bot --no-verify-jwt    # optional
 supabase functions deploy run-pipeline --no-verify-jwt    # optional
+supabase functions deploy refresh-graph-analysis --no-verify-jwt # optional
 supabase functions deploy monitor-pipeline --no-verify-jwt # optional
 
 # 7. Seed owner API key
@@ -80,6 +81,8 @@ python3 scripts/seed_owner_key.py
 | `delete_thought` | Permanent delete (cascades connections) | `id` |
 | `migration_guide` | Import runbook for external platforms | `platform` |
 | `serendipity_digest` | Surface unexpected cross-topic connections | `days`, `limit` |
+| `pipeline` | Pipeline monitoring: health, runs, merges | `type`, `days`, `source` |
+| `review_stale` | Review flagged stale thoughts for archival | `action`, `thought_id` |
 
 ## Pipeline Sources
 
@@ -122,18 +125,22 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and [docs/security-au
 | 0.80+ | Typed connections (extends/contradicts/etc.) |
 | 0.75+ | Connection linking |
 | 0.70 | Default search floor |
-| 0.40 | Default quality gate |
+| 0.40 | Default quality gate (pipeline sources only) |
+| 0.85+ staleness | Auto-archive (LLM confirms) |
+| 0.70-0.85 staleness | Context-confirmed archival |
+| 0.40-0.70 staleness | Flagged for human review |
 
 ## Project Structure
 
 ```
 supabase/
   functions/
-    open-brain-mcp/    # MCP server (14 tools)
-    telegram-bot/      # Telegram webhook capture
-    run-pipeline/      # RSS, HF Papers, Emergent Mind ingestion
-    monitor-pipeline/  # Pipeline health + Telegram alerts
-    _shared/           # Shared modules (Supabase client, OpenRouter, types)
+    open-brain-mcp/        # MCP server (16 tools)
+    telegram-bot/          # Telegram webhook capture
+    run-pipeline/          # RSS, HF Papers, Emergent Mind ingestion + dream decay
+    refresh-graph-analysis/ # Precomputed graph analysis cache (daily)
+    monitor-pipeline/      # Pipeline health + Telegram alerts
+    _shared/               # Shared modules (Supabase client, OpenRouter, types)
   migrations/          # SQL migrations (applied with supabase db push)
 pipeline/              # Python pipeline scripts (Reddit, briefing)
 scripts/               # Bootstrap, deploy, validate scripts
