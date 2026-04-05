@@ -5,7 +5,6 @@
 import { supabaseAdmin } from "../_shared/supabase-client.ts";
 import { chatCompletion, generateEmbedding } from "../_shared/openrouter.ts";
 import { errorResponse } from "../_shared/errors.ts";
-import { VALID_THEMES } from "../_shared/types.ts";
 import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
 import { dreamDecay } from "../_shared/dream-decay.ts";
@@ -271,7 +270,7 @@ async function combinedTriageAndExtract(content: string, imageUrl?: string): Pro
     const metadata: Record<string, unknown> = {
       type: typeof parsed.type === "string" ? parsed.type : METADATA_FALLBACK.type,
       relevance: typeof parsed.relevance === "string" ? parsed.relevance : METADATA_FALLBACK.relevance,
-      theme: typeof parsed.theme === "string" && (VALID_THEMES as readonly string[]).includes(parsed.theme) ? parsed.theme : "personal",
+      theme: typeof parsed.theme === "string" ? parsed.theme : METADATA_FALLBACK.theme,
       topics: Array.isArray(parsed.topics) ? parsed.topics : triage.key_topics,
       entities: Array.isArray(parsed.entities) ? parsed.entities : [],
       quality: typeof parsed.quality === "number" ? parsed.quality : 0.5,
