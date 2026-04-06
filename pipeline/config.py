@@ -87,6 +87,8 @@ RSS_FEEDS = {
     "Ahead of AI": "https://magazine.sebastianraschka.com/feed",
     "Interconnects": "https://www.interconnects.ai/feed",
     "Decoding AI": "https://www.decodingai.com/feed",
+    "The AI Engineer": "https://theaiengineer.substack.com/feed",
+    "Turing Post": "https://turingpost.substack.com/feed",
 }
 
 # ── Customize: Focus Terms ──

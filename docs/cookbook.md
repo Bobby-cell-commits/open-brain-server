@@ -5,7 +5,7 @@ paths:
 
 # Open Brain MCP Cookbook
 
-How to use the 14 MCP tools effectively — patterns, compositions, and non-obvious behaviors.
+How to use the 16 MCP tools effectively — patterns, compositions, and non-obvious behaviors.
 
 ## Quick Reference
 
@@ -23,7 +23,10 @@ How to use the 14 MCP tools effectively — patterns, compositions, and non-obvi
 | `refresh_salience` | Recompute all salience scores | (none) |
 | `update_thought` | Rewrite content (re-embeds, re-extracts metadata) | `id`, `content` |
 | `delete_thought` | Permanent delete (cascades connections) | `id` |
+| `serendipity_digest` | Resurface forgotten high-quality thoughts | (none) |
+| `pipeline` | Pipeline monitoring: health, runs, merges | `type` (required), `days=7`, `source`, `merge_type` |
 | `migration_guide` | Import runbook for external platforms | `platform` |
+| `review_stale` | Review flagged stale thoughts | `action=list/approve/reject`, `thought_id` |
 
 ## Explore Patterns
 
@@ -82,10 +85,13 @@ If capture returns `{merged: true}`, the content was >92% similar to an existing
 `analyze(type="density")` → connection stats at thresholds 0.70/0.75/0.80/0.85. Watch for: high `zero_link_count` (orphaned thoughts), low avg connections (sparse graph). Healthy: most thoughts have 2+ connections at 0.75 threshold.
 
 **Pipeline health:**
-Pipeline monitoring uses the `monitor-pipeline` Edge Function and REST API (not an MCP tool). Call `get_source_health`, `get_pipeline_runs`, and `check_alert_conditions` RPCs via REST. `analyze(type="sources")` → cross-source similarity and coverage overlap.
+`pipeline(type="health")` → per-source status, last capture time, run stats, failure rates, and active alerts. `pipeline(type="runs", days=7)` → run history with capture/failure/filter counts per run. `analyze(type="sources")` → cross-source similarity and coverage overlap. The `monitor-pipeline` Edge Function handles automated Telegram alerting separately.
 
 **Merge audit:**
-Query merge history via the `get_merge_history` RPC (REST API call). Returns recent merge operations with type (auto/llm_confirmed/ingest_dedup), similarity, and content previews. Use to debug unexpected merges or verify dedup is working correctly.
+`pipeline(type="merges", days=7)` → recent merge operations with type (auto/llm_confirmed/ingest_dedup), similarity, and content previews. Filter by type: `pipeline(type="merges", merge_type="auto")`. Use to debug unexpected merges or verify dedup is working correctly.
+
+**Staleness health check:**
+`pipeline(type="runs")` → check `dream_decay` in recent runs for archive counts. `review_stale()` → pending Tier 3 candidates awaiting human/agent review. `review_stale(action="approve", thought_id="...")` to archive, `review_stale(action="reject", thought_id="...")` to keep and exclude for 30 days.
 
 **Salience refresh:**
 `refresh_salience()` after bulk operations (backfills, merges, large ingestion runs). Salience formula: `recency_decay * ln(access+1) * (1 + 0.1*connections) * (1 + 0.2*merges) * source_weight * pinned_multiplier`. Stale salience = suboptimal list/search ordering.
@@ -136,3 +142,6 @@ Query merge history via the `get_merge_history` RPC (REST API call). Returns rec
 - **Entity types are case-sensitive:** Use lowercase: "person", "project", "tool", "organization".
 - **Quality gating is on by default:** Both `search_thoughts` and `list_thoughts` filter out thoughts with quality < 0.4. Pass `min_quality=0` to disable. This prevents noise thoughts from consuming ranking slots.
 - **Threshold cheat sheet:** 0.92+ = dedup merge, 0.85-0.92 = near-miss logging, 0.80+ = typed connections, 0.75+ = connection linking, 0.70 = default search floor, 0.40 = default quality gate.
+- **Staleness tiers:** 0.85+ = auto-archive (LLM confirms at any confidence), 0.70-0.85 = context-confirmed (LLM must say archive with high confidence), 0.40-0.70 = flagged for review (never auto-archived). Scores below 0.40 are healthy.
+- **Archived thoughts are invisible:** All search, list, stats, dedup, and analysis RPCs filter `archived_at IS NULL`. Archived thoughts still exist in the DB and can be unarchived.
+- **Sole-entity protection:** If archiving a thought would leave zero active thoughts for any of its entities, it's skipped. Prevents knowledge gaps.

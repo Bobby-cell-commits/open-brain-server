@@ -106,9 +106,6 @@ registerAdminRoutes(app, supabaseAdmin, hashKey);
 // ---------------------------------------------------------------------------
 
 async function handleMcp(c: any) {
-  // Return 200 for GET/DELETE/OPTIONS probes — Claude Code's MCP client may send
-  // these during discovery. The transport only handles POST; non-POST methods
-  // hitting the transport return 400/405 which can trigger the OAuth flow.
   if (c.req.method !== "POST") {
     return c.json({
       jsonrpc: "2.0",
@@ -118,8 +115,9 @@ async function handleMcp(c: any) {
   const mcp = createMcpServer();
   const handler = transport.bind(mcp);
   const brainId = c.get("brainId");
+  const brainContext = c.req.header("x-brain-context") ?? "manual";
   return await handler(c.req.raw, {
-    authInfo: { token: "", scopes: [], extra: { brainId } },
+    authInfo: { token: "", scopes: [], extra: { brainId, brainContext } },
   });
 }
 

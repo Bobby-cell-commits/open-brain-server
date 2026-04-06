@@ -1,0 +1,38 @@
+name: Deno Lint & Test
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - "openbrain/supabase/functions/**"
+      - ".github/workflows/deno.yml"
+  pull_request:
+    branches: ["master"]
+    paths:
+      - "openbrain/supabase/functions/**"
+      - ".github/workflows/deno.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openbrain/supabase/functions
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run linter
+        run: deno lint
+
+      - name: Run tests
+        run: deno test -A --no-check

@@ -60,11 +60,11 @@ async function upsertCache(brainId: string, type: string, result: unknown, durat
 export function registerAnalyze(mcp: McpServer, z: Z): void {
   mcp.tool("analyze", {
     description:
-      "Analyze the knowledge graph. type=hubs finds high-connectivity thoughts, type=density shows connection stats at similarity thresholds, type=sources shows per-source counts and cross-source overlap. Results are cached daily — use force=true for live computation.",
+      "Analyze the knowledge graph. type=hubs finds high-connectivity thoughts, type=density shows connection stats at similarity thresholds, type=sources shows per-source counts and cross-source overlap, type=co_occurrence shows co-occurrence edge health and session stats. Results are cached daily — use force=true for live computation (co_occurrence is always live).",
     inputSchema: z.object({
       type: z
-        .enum(["hubs", "density", "sources"])
-        .describe("Which analysis to run: hubs, density, or sources"),
+        .enum(["hubs", "density", "sources", "co_occurrence"])
+        .describe("Which analysis to run: hubs, density, sources, or co_occurrence"),
       min_connections: z
         .coerce.number()
         .int()
@@ -118,6 +118,17 @@ export function registerAnalyze(mcp: McpServer, z: Z): void {
           };
 
           return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+        }
+
+        // --- Co-occurrence: always live (lightweight query, no cache needed) ---
+        if (args.type === "co_occurrence") {
+          const { data, error } = await supabaseAdmin.rpc("analyze_co_occurrence", {
+            p_brain_id: brainId,
+          });
+          if (error) throw error;
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify(data) }],
+          };
         }
 
         // --- Density / Hubs: read from cache or force live ---

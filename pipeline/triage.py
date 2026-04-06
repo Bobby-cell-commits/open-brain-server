@@ -65,30 +65,37 @@ FALLBACK_TRIAGE = {
 PAPER_TRIAGE_SYSTEM_PROMPT = """You are a research paper triage assistant for a developer who builds AI applications and tracks ML research. Given a paper's metadata, produce a structured assessment. Return JSON with:
 - "summary": 2-3 sentence summary focused on what is novel, why it matters, and practical implications
 - "category": classify using this procedure:
-  1. Is this about AI coding tools, MCP protocol, or developer tooling?
+  1. Is this about AI coding tools, MCP protocol, or developer tooling? (e.g., papers on code generation, LLM-based IDEs, prompt engineering tools)
      → YES: "claude-code" → STOP
      → NO: continue to 2
-  2. Is this about building AI applications, pipelines, or automation?
+  2. Is this about building AI applications, pipelines, or automation? (e.g., workflow orchestration, end-to-end app frameworks, productionization)
      → YES: "side-projects" → STOP
      → NO: continue to 3
-  3. Is this ML research, an academic paper, or a technical concept?
+  3. Is this ML research, an academic paper, or a technical concept? (e.g., new models, training methods, theoretical advances)
      → YES: "learning" → STOP
      → NO: "personal"
+  For survey, review, or meta-analysis papers, always classify as "learning".
 - "actionability": classify using this procedure:
-  1. Does this introduce a model, technique, or tool directly usable in current projects?
+  1. Does this introduce a model, technique, tool, or dataset that could be directly used or adapted in current projects? If the paper provides open-source code, a public implementation, a Colab/demo link, or if the abstract explicitly states practical usage, deployment, or real-world application, prefer "high".
      → YES: "high" → STOP
      → NO: continue to 2
-  2. Relevant research worth reading and understanding soon?
+  2. Is this research likely to influence your work or decisions within the next month?
      → YES: "medium" → STOP
      → NO: continue to 3
-  3. Interesting background knowledge for general awareness?
+  3. Is this useful background knowledge for AI application development or ML research?
      → YES: "low" → STOP
      → NO: "archive"
 - "key_topics": array of 2-4 topic tags, lowercase hyphenated
 - "tools_mentioned": array of specific models/libraries/datasets released (empty if none)
 - "urls": array of notable URLs (github repos, demo links) if mentioned in abstract
-Be concise. Focus on practical implications for an AI application developer."""
+If the paper introduces a new dataset, always mention it in tools_mentioned and key_topics, and prefer category "learning" unless the dataset is specifically for a new tool or application. For borderline cases between "side-projects" and "learning", prefer "learning". For survey, review, or meta-analysis papers, always classify as "learning". Be concise. Focus on practical implications for an AI application developer.
 
+For borderline cases, use this example for guidance:
+Example: A paper introduces a new dataset for benchmarking LLMs and also provides a tool for dataset analysis. If the main contribution is the dataset, classify as "learning"; if the main contribution is the tool, classify as "side-projects".
+
+Example: A paper presents a new LLM evaluation benchmark and releases both the dataset and a web demo. If the dataset is the main contribution, classify as "learning" and mention both in tools_mentioned; if the web demo/tool is the main focus, classify as "side-projects".
+
+Example: A paper presents a new training method, releases a dataset, and provides an implementation. If the training method is the main contribution, classify as "learning" and mention both the dataset and implementation in tools_mentioned."""
 
 def is_image_url(url: str) -> bool:
     """Check if a URL points to a Reddit/Imgur image."""
@@ -145,6 +152,8 @@ def triage(content: str, image_url: str | None = None, max_retries: int = 3) -> 
                         {"role": "user", "content": user_content},
                     ],
                     "response_format": {"type": "json_object"},
+                    "temperature": 0,
+                    "seed": 42,
                 },
                 timeout=60 if image_url else 30,
             )
@@ -227,6 +236,8 @@ def triage_paper(title: str, abstract: str, authors: str,
                         {"role": "user", "content": content},
                     ],
                     "response_format": {"type": "json_object"},
+                    "temperature": 0,
+                    "seed": 42,
                 },
                 timeout=30,
             )

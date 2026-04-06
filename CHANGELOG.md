@@ -6,6 +6,33 @@ When upgrading, apply new migrations with `supabase db push --linked` from the `
 
 ## [Unreleased]
 
+## 2026-04-06
+
+### Added
+- **Co-occurrence edge strengthening.** Usage-driven graph layer: retrieval sessions are logged, co-occurring thoughts get weighted edges that strengthen with repeated co-retrieval. Ebbinghaus forgetting curve decay + Turrigiano homeostatic normalization prevent runaway hub growth.
+- `retrieval_sessions` audit table -- append-only log of all search/list retrievals.
+- `co_occurrence_edges` table -- materialized edges with weight, raw count, half-life, decay.
+- `analyze(type="co_occurrence")` -- graph health observability: edge stats, weight distribution, top edges, hub report, session counts.
+- `graph_expanded_search` v2 -- co-occurrence expansion pass adds usage-correlated thoughts to search results.
+- `run-co-occurrence-decay` workflow reference -- weekly decay maintenance (Sunday 4 AM UTC).
+
+### Changed
+- `search_thoughts` and `list_thoughts` now fire-and-forget log retrieval sessions and update co-occurrence edges.
+- `run-pipeline` Edge Function handles co-occurrence decay as a maintenance task.
+- `x-brain-context` header extracted for context-weighted session logging.
+- GitHub Actions workflows moved from `.github/workflows/` to `docs/workflows/` -- reference examples only, no longer auto-trigger on forks.
+- Tool count unchanged at 16.
+
+### Fixed
+- `source_health` view security invoker policy added.
+
+### Migrations
+4 new migrations to apply:
+- `20260405000006_source_health_security_invoker.sql`
+- `20260406000001_co_occurrence_tables.sql` -- adds `retrieval_sessions` + `co_occurrence_edges` tables with RLS
+- `20260406000002_co_occurrence_rpcs.sql` -- 4 RPCs: session logging, edge UPSERT, decay, analysis
+- `20260406000003_graph_expanded_search_v2.sql` -- co-occurrence expansion CTE in graph search
+
 ## 2026-04-05b
 
 ### Fixed
@@ -22,7 +49,7 @@ This is a code-only fix in `_shared/types.ts` and `run-pipeline/index.ts`. Redep
 - **`pipeline` MCP tool** -- pipeline monitoring: health checks, run history, merge audit. Modes: `health`, `runs`, `merges`.
 - **Graph analysis caching.** 5 expensive O(n^2) graph RPCs now run offline via daily `refresh-graph-analysis` Edge Function. Results cached in `graph_analysis_cache` table. MCP tools read from cache instantly; pass `force=true` for live computation.
 - **Source-aware quality gating.** Intentional captures (telegram, mcp) bypass `min_quality` filtering in search and list. Quality gate now only applies to automated pipeline sources.
-- **GitHub Actions workflows** for all scheduled tasks: RSS, HF Papers, Emergent Mind, dream dedup, dream decay, graph analysis refresh, pipeline monitoring.
+- **GitHub Actions workflow references** (in `docs/workflows/`) for all scheduled tasks: RSS, HF Papers, Emergent Mind, dream dedup, dream decay, graph analysis refresh, pipeline monitoring.
 - `get_thought_embeddings` RPC for embedding-based clustering.
 
 ### Fixed

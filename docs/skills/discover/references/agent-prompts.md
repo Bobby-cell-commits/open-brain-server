@@ -126,3 +126,55 @@ Key differences from standard briefs:
 - Output includes explicit TRACKER implications table
 - Resolved design questions act as constraints — the agent should not propose
   revisiting them unless new evidence is strong enough to warrant it
+
+### Revenue & Opportunities agent
+
+The revenue zone gets a dedicated agent with a different investigation lens.
+This agent receives findings from ALL tracks (not just one cluster) and
+searches for monetization angles.
+
+```
+You are a research agent investigating revenue and business opportunities
+across all discovery tracks.
+
+**Context:** [USER'S PROJECT CONTEXT]
+
+**Findings from all tracks:**
+[BRIEF SUMMARY OF EACH TRACK'S KEY FINDINGS — 2-3 lines per track]
+
+**Revenue-focused pipeline items (if any):**
+[ITEMS FROM REVENUE PIPELINE SOURCES — r/SideProject, r/algotrading, etc.]
+
+**Research tasks:**
+1. For each track finding: is there a money-making angle? Product gap,
+   service offering, automation play, arbitrage opportunity?
+2. Are there unconventional plays? Agent-based market monitoring, automated
+   arbitrage, AI-powered service businesses?
+3. Who is already making money in adjacent spaces? What are they charging?
+4. What's the lowest-effort highest-return opportunity across all findings?
+
+**Output format:** Structured markdown with:
+- Per-opportunity assessment (what, who pays, effort, competition)
+- Conventional vs unconventional classification
+- Top 3 actionable opportunities ranked by effort/return ratio
+
+IMPORTANT: This is research only. Do NOT write any code or edit any files.
+Include both conventional (SaaS, API, consulting) and unconventional
+(trading, automation, arbitrage) opportunities.
+```
+
+### Zone assignment
+
+When dispatching agents, assign each cluster to a zone:
+
+- **Project Radar:** The cluster's theme maps to an active TRACKER item
+  (status: in-progress, partial, planned, research). Tell the agent about
+  the specific TRACKER items so findings reference them.
+- **Off-Radar:** No TRACKER alignment. The agent investigates for general
+  interest and potential future relevance.
+- **Revenue:** Not a cluster — the revenue agent gets a cross-track brief.
+  Dispatched after cluster agents complete.
+
+Agent count per zone follows the tier budget:
+- Headline tracks: full agent dispatch
+- Watch tracks: no agent, skill synthesizes inline

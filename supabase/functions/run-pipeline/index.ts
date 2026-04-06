@@ -5,6 +5,7 @@
 import { supabaseAdmin } from "../_shared/supabase-client.ts";
 import { chatCompletion, generateEmbedding } from "../_shared/openrouter.ts";
 import { errorResponse } from "../_shared/errors.ts";
+import { VALID_THEMES } from "../_shared/types.ts";
 import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
 import { dreamDecay } from "../_shared/dream-decay.ts";
@@ -270,7 +271,7 @@ async function combinedTriageAndExtract(content: string, imageUrl?: string): Pro
     const metadata: Record<string, unknown> = {
       type: typeof parsed.type === "string" ? parsed.type : METADATA_FALLBACK.type,
       relevance: typeof parsed.relevance === "string" ? parsed.relevance : METADATA_FALLBACK.relevance,
-      theme: typeof parsed.theme === "string" ? parsed.theme : METADATA_FALLBACK.theme,
+      theme: typeof parsed.theme === "string" && (VALID_THEMES as readonly string[]).includes(parsed.theme) ? parsed.theme : "personal",
       topics: Array.isArray(parsed.topics) ? parsed.topics : triage.key_topics,
       entities: Array.isArray(parsed.entities) ? parsed.entities : [],
       quality: typeof parsed.quality === "number" ? parsed.quality : 0.5,
@@ -812,6 +813,7 @@ Deno.serve(async (req) => {
   let runDreamDedup = false;
   let dreamScanDays: number | undefined;
   let runDreamDecay = false;
+  let runCoOccurrenceDecay = false;
   try {
     const body = await req.json();
     if (body.source && typeof body.source === "string") {
@@ -825,6 +827,9 @@ Deno.serve(async (req) => {
     }
     if (body.dream_decay === true) {
       runDreamDecay = true;
+    }
+    if (body.co_occurrence_decay === true) {
+      runCoOccurrenceDecay = true;
     }
   } catch {
     // Empty body or invalid JSON — default to "all"
@@ -912,6 +917,22 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Co-occurrence edge decay (opt-in via co_occurrence_decay:true)
+  let coOccurrenceDecayResult = null;
+  if (runCoOccurrenceDecay) {
+    try {
+      const { data, error } = await supabaseAdmin.rpc("decay_co_occurrence_edges", {
+        p_brain_id: OWNER_BRAIN_ID,
+      });
+      if (error) throw error;
+      coOccurrenceDecayResult = data;
+      console.log("Co-occurrence decay:", JSON.stringify(data));
+    } catch (err) {
+      console.error("Co-occurrence decay failed:", err);
+      coOccurrenceDecayResult = { error: String(err) };
+    }
+  }
+
   // --- Pipeline run logging ---
   const executionMs = Date.now() - runStartTime;
   const hasErrors = Object.keys(sources).some((k) => k.endsWith("_error"));
@@ -964,6 +985,7 @@ Deno.serve(async (req) => {
       salience_refreshed: salienceRefreshed,
       dream_dedup: dreamDedupResult,
       dream_decay: dreamDecayResult,
+      co_occurrence_decay: coOccurrenceDecayResult,
       timestamp: new Date().toISOString(),
     }),
     { headers: { "Content-Type": "application/json" } },

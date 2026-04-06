@@ -27,6 +27,7 @@ Deno.test("returns thoughts as JSON", async () => {
 
 Deno.test("empty result returns empty array", async () => {
   stubFrom(supabaseAdmin, () => mockChain({ data: [], error: null }));
+  stubRpc(supabaseAdmin, () => Promise.resolve({ data: null, error: null }));
   try {
     const result = await handler({ limit: 20 }, mockCtx());
     assertEquals(JSON.parse(result.content[0].text), []);
@@ -93,6 +94,7 @@ Deno.test("type filter applies correct JSONB filter", async () => {
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ type: "idea", limit: 20 }, mockCtx());
     assertEquals(filterArgs, ["metadata->>type", "eq", "idea"]);
@@ -129,16 +131,16 @@ Deno.test("fires increment_access_count RPC for returned thought IDs", async () 
 });
 
 Deno.test("does not fire increment_access_count for empty results", async () => {
-  let rpcCalled = false;
+  let accessRpcCalled = false;
 
   stubFrom(supabaseAdmin, () => mockChain({ data: [], error: null }));
-  stubRpc(supabaseAdmin, () => {
-    rpcCalled = true;
+  stubRpc(supabaseAdmin, (name: string) => {
+    if (name === "increment_access_count") accessRpcCalled = true;
     return Promise.resolve({ data: null, error: null });
   });
   try {
     await handler({ limit: 20 }, mockCtx());
-    assertEquals(rpcCalled, false);
+    assertEquals(accessRpcCalled, false);
   } finally {
     restore(supabaseAdmin);
   }
@@ -177,7 +179,7 @@ Deno.test("orders by salience DESC then created_at DESC", async () => {
 });
 
 Deno.test("min_quality default 0.4 applies quality filter", async () => {
-  const gteCalls: any[][] = [];
+  const orCalls: any[][] = [];
   const eqCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
@@ -187,24 +189,26 @@ Deno.test("min_quality default 0.4 applies quality filter", async () => {
       limit: () => chain,
       filter: () => chain,
       contains: () => chain,
-      gte: (...args: any[]) => { gteCalls.push(args); return chain; },
+      gte: () => chain,
       eq: (...args: any[]) => { eqCalls.push(args); return chain; },
+      or: (...args: any[]) => { orCalls.push(args); return chain; },
       then: (res: (v: any) => void) => res({ data: [], error: null }),
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ min_quality: 0.4, limit: 20 }, mockCtx());
-    const qualityCall = gteCalls.find((c) => c[0] === "metadata->>quality");
-    assertEquals(qualityCall, ["metadata->>quality", "0.4"]);
+    const qualityOr = orCalls.find((c) => typeof c[0] === "string" && c[0].includes("metadata->>quality"));
+    assertEquals(qualityOr, ["source.in.(telegram,mcp),metadata->>quality.gte.0.4"]);
   } finally {
     restore(supabaseAdmin);
   }
 });
 
-Deno.test("min_quality=0 applies filter with zero (passes everything)", async () => {
+Deno.test("min_quality=0 disables quality filter (passes everything)", async () => {
   const gteCalls: any[][] = [];
-  const eqCalls: any[][] = [];
+  const orCalls: any[][] = [];
 
   stubFrom(supabaseAdmin, () => {
     const chain: any = {
@@ -214,15 +218,20 @@ Deno.test("min_quality=0 applies filter with zero (passes everything)", async ()
       filter: () => chain,
       contains: () => chain,
       gte: (...args: any[]) => { gteCalls.push(args); return chain; },
-      eq: (...args: any[]) => { eqCalls.push(args); return chain; },
+      eq: () => chain,
+      or: (...args: any[]) => { orCalls.push(args); return chain; },
       then: (res: (v: any) => void) => res({ data: [], error: null }),
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ min_quality: 0, limit: 20 }, mockCtx());
-    const qualityCall = gteCalls.find((c) => c[0] === "metadata->>quality");
-    assertEquals(qualityCall, ["metadata->>quality", "0"]);
+    // min_quality=0 means the condition `min_quality > 0` is false — no quality filter applied
+    const qualityGte = gteCalls.find((c) => c[0] === "metadata->>quality");
+    assertEquals(qualityGte, undefined);
+    const qualityOr = orCalls.find((c) => typeof c[0] === "string" && c[0].includes("metadata->>quality"));
+    assertEquals(qualityOr, undefined);
   } finally {
     restore(supabaseAdmin);
   }
@@ -241,10 +250,12 @@ Deno.test("theme filter applies correct JSONB filter", async () => {
       contains: () => chain,
       gte: () => chain,
       eq: (...args: any[]) => { eqCalls.push(args); return chain; },
+      or: () => chain,
       then: (res: (v: any) => void) => res({ data: [], error: null }),
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ theme: "ml-research", limit: 20 }, mockCtx());
     // Should have exactly one filter call for theme
@@ -267,10 +278,12 @@ Deno.test("source filter applies correct equality filter", async () => {
       contains: () => chain,
       gte: () => chain,
       eq: (...args: any[]) => { eqCalls.push(args); return chain; },
+      or: () => chain,
       then: (res: (v: any) => void) => res({ data: [], error: null }),
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ source: "telegram", limit: 20 }, mockCtx());
     const sourceEq = eqCalls.find((c: any[]) => c[0] === "source");
@@ -294,10 +307,12 @@ Deno.test("since filter applies gte on created_at with ISO timestamp", async () 
       contains: () => chain,
       gte: (...args: any[]) => { gteCalls.push(args); return chain; },
       eq: () => chain,
+      or: () => chain,
       then: (res: (v: any) => void) => res({ data: [], error: null }),
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ since: "2026-04-01T08:30:00Z", limit: 20 }, mockCtx());
     const createdAtCall = gteCalls.find((c) => c[0] === "created_at");
@@ -319,10 +334,12 @@ Deno.test("since takes precedence over days when both provided", async () => {
       contains: () => chain,
       gte: (...args: any[]) => { gteCalls.push(args); return chain; },
       eq: () => chain,
+      or: () => chain,
       then: (res: (v: any) => void) => res({ data: [], error: null }),
     };
     return chain;
   });
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: null }));
   try {
     await handler({ since: "2026-04-01T08:30:00Z", days: 7, limit: 20 }, mockCtx());
     const createdAtCalls = gteCalls.filter((c) => c[0] === "created_at");

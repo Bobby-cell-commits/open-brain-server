@@ -2,6 +2,7 @@
 // Supports filtering by type, topic, person, theme, and time window.
 
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
+import { CO_OCCURRENCE_WEIGHTS } from "../../_shared/types.ts";
 
 import type { McpServer } from "npm:mcp-lite";
 
@@ -109,6 +110,27 @@ export function registerListThoughts(mcp: McpServer, z: Z): void {
         const ids = (data as { id: string }[])?.map((t) => t.id) ?? [];
         if (ids.length > 0) {
           Promise.resolve(supabaseAdmin.rpc("increment_access_count", { p_brain_id: brainId, thought_ids: ids })).catch(() => {});
+        }
+
+        // Fire-and-forget: log retrieval session + update co-occurrence edges
+        const topIds = ids.slice(0, 10);
+        const brainContext = (ctx?.authInfo?.extra?.brainContext as string) ?? "manual";
+        const contextWeight = CO_OCCURRENCE_WEIGHTS["list_thoughts"] ?? 0.5;
+
+        Promise.resolve(supabaseAdmin.rpc("log_retrieval_session", {
+          p_brain_id: brainId,
+          p_tool_name: "list_thoughts",
+          p_context: brainContext,
+          p_query_text: null,
+          p_thought_ids: topIds,
+        })).catch(() => {});
+
+        if (topIds.length >= 2) {
+          Promise.resolve(supabaseAdmin.rpc("update_co_occurrence", {
+            p_brain_id: brainId,
+            p_thought_ids: topIds,
+            p_context_weight: contextWeight,
+          })).catch(() => {});
         }
 
         return {

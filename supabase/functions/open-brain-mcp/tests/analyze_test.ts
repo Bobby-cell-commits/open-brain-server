@@ -1,7 +1,7 @@
 // analyze: Tests for consolidated graph analysis tool.
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
-import { createMockMcp, mockChain, stubRpc, restore, mockCtx } from "./_helpers.ts";
+import { createMockMcp, mockChain, stubRpc, stubFrom, restore, mockCtx } from "./_helpers.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
 import { registerAnalyze } from "../tools/analyze.ts";
 import * as z from "npm:zod@3";
@@ -12,16 +12,22 @@ const handler = tools.get("analyze")!;
 
 // --- hubs mode ---
 
-Deno.test("hubs: calls analysis_rich_thoughts RPC", async () => {
-  let capturedName: string | undefined;
+Deno.test("hubs: reads hub data from cache", async () => {
+  const hubData = [
+    { id: "aaa", source: "telegram", strong_matches: 8, preview: "AI agents" },
+    { id: "bbb", source: "reddit", strong_matches: 12, preview: "LLM tooling" },
+  ];
 
-  stubRpc(supabaseAdmin, (name) => {
-    capturedName = name;
-    return mockChain({ data: [], error: null });
-  });
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: hubData, computed_at: "2026-04-06T00:00:00Z", duration_ms: 500 }, error: null }),
+  );
   try {
-    await handler({ type: "hubs", min_connections: 5 }, mockCtx());
-    assertEquals(capturedName, "analysis_rich_thoughts");
+    const result = await handler({ type: "hubs", min_connections: 5 }, mockCtx());
+    assertEquals(result.isError, undefined);
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.data.length, 2);
+    assertEquals(parsed.data[0].strong_matches, 8);
+    assertEquals(parsed.cached_at, "2026-04-06T00:00:00Z");
   } finally {
     restore(supabaseAdmin);
   }
@@ -33,13 +39,15 @@ Deno.test("hubs: returns hub thoughts as JSON", async () => {
     { id: "bbb", source: "reddit", strong_matches: 12, preview: "LLM tooling" },
   ];
 
-  stubRpc(supabaseAdmin, () => mockChain({ data: hubData, error: null }));
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: hubData, computed_at: "2026-04-06T00:00:00Z", duration_ms: 500 }, error: null }),
+  );
   try {
     const result = await handler({ type: "hubs", min_connections: 5 }, mockCtx());
     const parsed = JSON.parse(result.content[0].text);
-    assertEquals(parsed.length, 2);
-    assertEquals(parsed[0].strong_matches, 8);
-    assertEquals(parsed[1].preview, "LLM tooling");
+    assertEquals(parsed.data.length, 2);
+    assertEquals(parsed.data[0].strong_matches, 8);
+    assertEquals(parsed.data[1].preview, "LLM tooling");
     assertEquals(result.isError, undefined);
   } finally {
     restore(supabaseAdmin);
@@ -53,22 +61,24 @@ Deno.test("hubs: filters by min_connections when > 5", async () => {
     { id: "ccc", source: "mcp", strong_matches: 10, preview: "High hub" },
   ];
 
-  stubRpc(supabaseAdmin, () => mockChain({ data: hubData, error: null }));
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: hubData, computed_at: "2026-04-06T00:00:00Z", duration_ms: 500 }, error: null }),
+  );
   try {
     const result = await handler({ type: "hubs", min_connections: 7 }, mockCtx());
     const parsed = JSON.parse(result.content[0].text);
-    assertEquals(parsed.length, 2);
-    assertEquals(parsed[0].id, "bbb");
-    assertEquals(parsed[1].id, "ccc");
+    assertEquals(parsed.data.length, 2);
+    assertEquals(parsed.data[0].id, "bbb");
+    assertEquals(parsed.data[1].id, "ccc");
   } finally {
     restore(supabaseAdmin);
   }
 });
 
-Deno.test("hubs: RPC error returns isError", async () => {
-  stubRpc(supabaseAdmin, () =>
-    mockChain({ data: null, error: { message: "timeout" } }),
-  );
+Deno.test("hubs: cache error returns isError", async () => {
+  stubFrom(supabaseAdmin, () => {
+    throw new Error("timeout");
+  });
   try {
     const result = await handler({ type: "hubs", min_connections: 5 }, mockCtx());
     assertEquals(result.isError, true);
@@ -80,16 +90,21 @@ Deno.test("hubs: RPC error returns isError", async () => {
 
 // --- density mode ---
 
-Deno.test("density: calls analysis_connection_density RPC", async () => {
-  let capturedName: string | undefined;
+Deno.test("density: reads density data from cache", async () => {
+  const densityData = [
+    { threshold: 0.75, avg_links: 2.3, median_links: 2, zero_link_count: 15, ten_plus_count: 3 },
+    { threshold: 0.80, avg_links: 1.1, median_links: 1, zero_link_count: 40, ten_plus_count: 0 },
+  ];
 
-  stubRpc(supabaseAdmin, (name) => {
-    capturedName = name;
-    return mockChain({ data: [], error: null });
-  });
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: densityData, computed_at: "2026-04-06T00:00:00Z", duration_ms: 500 }, error: null }),
+  );
   try {
-    await handler({ type: "density", min_connections: 5 }, mockCtx());
-    assertEquals(capturedName, "analysis_connection_density");
+    const result = await handler({ type: "density", min_connections: 5 }, mockCtx());
+    assertEquals(result.isError, undefined);
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.data.length, 2);
+    assertEquals(parsed.data[0].threshold, 0.75);
   } finally {
     restore(supabaseAdmin);
   }
@@ -101,23 +116,25 @@ Deno.test("density: returns density data as JSON", async () => {
     { threshold: 0.80, avg_links: 1.1, median_links: 1, zero_link_count: 40, ten_plus_count: 0 },
   ];
 
-  stubRpc(supabaseAdmin, () => mockChain({ data: densityData, error: null }));
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: densityData, computed_at: "2026-04-06T00:00:00Z", duration_ms: 500 }, error: null }),
+  );
   try {
     const result = await handler({ type: "density", min_connections: 5 }, mockCtx());
     const parsed = JSON.parse(result.content[0].text);
-    assertEquals(parsed.length, 2);
-    assertEquals(parsed[0].threshold, 0.75);
-    assertEquals(parsed[0].avg_links, 2.3);
+    assertEquals(parsed.data.length, 2);
+    assertEquals(parsed.data[0].threshold, 0.75);
+    assertEquals(parsed.data[0].avg_links, 2.3);
     assertEquals(result.isError, undefined);
   } finally {
     restore(supabaseAdmin);
   }
 });
 
-Deno.test("density: RPC error returns isError", async () => {
-  stubRpc(supabaseAdmin, () =>
-    mockChain({ data: null, error: { message: "function not found" } }),
-  );
+Deno.test("density: cache error returns isError", async () => {
+  stubFrom(supabaseAdmin, () => {
+    throw new Error("function not found");
+  });
   try {
     const result = await handler({ type: "density", min_connections: 5 }, mockCtx());
     assertEquals(result.isError, true);
@@ -136,11 +153,13 @@ Deno.test("sources: calls both analysis RPCs", async () => {
     capturedNames.push(name);
     return mockChain({ data: [], error: null });
   });
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: [], computed_at: "2026-04-06T00:00:00Z", duration_ms: 100 }, error: null }),
+  );
   try {
     await handler({ type: "sources", min_connections: 5 }, mockCtx());
     assertEquals(capturedNames.includes("analysis_baseline"), true);
-    assertEquals(capturedNames.includes("analysis_source_pairs"), true);
-    assertEquals(capturedNames.length, 2);
+    assertEquals(capturedNames.length, 1);
   } finally {
     restore(supabaseAdmin);
   }
@@ -159,8 +178,11 @@ Deno.test("sources: returns combined sources and cross_source", async () => {
     if (name === "analysis_baseline") {
       return mockChain({ data: baselineData, error: null });
     }
-    return mockChain({ data: pairsData, error: null });
+    return mockChain({ data: [], error: null });
   });
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: pairsData, computed_at: "2026-04-06T00:00:00Z", duration_ms: 100 }, error: null }),
+  );
   try {
     const result = await handler({ type: "sources", min_connections: 5 }, mockCtx());
     const parsed = JSON.parse(result.content[0].text);
@@ -175,6 +197,9 @@ Deno.test("sources: returns combined sources and cross_source", async () => {
 Deno.test("sources: RPC error returns isError", async () => {
   stubRpc(supabaseAdmin, () =>
     mockChain({ data: null, error: { message: "permission denied" } }),
+  );
+  stubFrom(supabaseAdmin, () =>
+    mockChain({ data: { result: [], computed_at: "2026-04-06T00:00:00Z", duration_ms: 100 }, error: null }),
   );
   try {
     const result = await handler({ type: "sources", min_connections: 5 }, mockCtx());

@@ -1,7 +1,7 @@
-// dedup_review: Tests parallel RPC calls, combined result, and client-side limit slicing.
+// dedup_review: Tests parallel cache reads, combined result, and client-side limit slicing.
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
-import { createMockMcp, mockChain, stubRpc, restore, mockCtx } from "./_helpers.ts";
+import { createMockMcp, mockChain, stubRpc, stubFrom, restore, mockCtx } from "./_helpers.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
 import { registerDedupReview } from "../tools/dedup-review.ts";
 import * as z from "npm:zod@3";
@@ -10,18 +10,17 @@ const { mcp, tools } = createMockMcp();
 registerDedupReview(mcp as any, z);
 const handler = tools.get("dedup_review")!;
 
-Deno.test("calls both dedup RPCs", async () => {
-  const capturedNames: string[] = [];
+Deno.test("calls both dedup cache reads", async () => {
+  let fromCallCount = 0;
 
-  stubRpc(supabaseAdmin, (name) => {
-    capturedNames.push(name);
-    return mockChain({ data: [], error: null });
+  stubFrom(supabaseAdmin, () => {
+    fromCallCount++;
+    return mockChain({ data: { result: [], computed_at: "2026-04-06T00:00:00Z", duration_ms: 100 }, error: null });
   });
   try {
     await handler({ limit: 20 }, mockCtx());
-    assertEquals(capturedNames.includes("analysis_dedup_candidates"), true);
-    assertEquals(capturedNames.includes("analysis_dedup_zones"), true);
-    assertEquals(capturedNames.length, 2);
+    // readCache is called twice in Promise.all (once for dedup_candidates, once for dedup_zones)
+    assertEquals(fromCallCount >= 2, true);
   } finally {
     restore(supabaseAdmin);
   }
@@ -36,11 +35,12 @@ Deno.test("returns candidates and zones", async () => {
     { zone: "0.95+", count: 1 },
   ];
 
-  stubRpc(supabaseAdmin, (name) => {
-    if (name === "analysis_dedup_candidates") {
-      return mockChain({ data: candidatesData, error: null });
-    }
-    return mockChain({ data: zonesData, error: null });
+  let fromCallCount = 0;
+  stubFrom(supabaseAdmin, () => {
+    fromCallCount++;
+    // First call = dedup_candidates, second call = dedup_zones
+    const result = fromCallCount === 1 ? candidatesData : zonesData;
+    return mockChain({ data: { result, computed_at: "2026-04-06T00:00:00Z", duration_ms: 100 }, error: null });
   });
   try {
     const result = await handler({ limit: 20 }, mockCtx());
@@ -63,11 +63,11 @@ Deno.test("slices candidates to limit", async () => {
   ];
   const zonesData = [{ zone: "0.92-0.95", count: 5 }];
 
-  stubRpc(supabaseAdmin, (name) => {
-    if (name === "analysis_dedup_candidates") {
-      return mockChain({ data: candidatesData, error: null });
-    }
-    return mockChain({ data: zonesData, error: null });
+  let fromCallCount = 0;
+  stubFrom(supabaseAdmin, () => {
+    fromCallCount++;
+    const result = fromCallCount === 1 ? candidatesData : zonesData;
+    return mockChain({ data: { result, computed_at: "2026-04-06T00:00:00Z", duration_ms: 100 }, error: null });
   });
   try {
     const result = await handler({ limit: 2 }, mockCtx());
@@ -81,9 +81,9 @@ Deno.test("slices candidates to limit", async () => {
 });
 
 Deno.test("RPC error returns isError", async () => {
-  stubRpc(supabaseAdmin, () =>
-    mockChain({ data: null, error: { message: "connection refused" } }),
-  );
+  stubFrom(supabaseAdmin, () => {
+    throw new Error("connection refused");
+  });
   try {
     const result = await handler({ limit: 20 }, mockCtx());
     assertEquals(result.isError, true);

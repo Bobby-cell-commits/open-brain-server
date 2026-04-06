@@ -34,7 +34,7 @@ Deno.test("calls hybrid_search_thoughts by default", async () => {
 
   stubFetch();
   stubRpc(supabaseAdmin, (name, args) => {
-    if (name !== "increment_access_count") {
+    if (name === "hybrid_search_thoughts") {
       rpcName = name;
       rpcArgs = args;
     }
@@ -125,7 +125,7 @@ Deno.test("expand=true calls graph_expanded_search", async () => {
 
   stubFetch();
   stubRpc(supabaseAdmin, (name, _args) => {
-    if (name !== "increment_access_count") rpcName = name;
+    if (name === "graph_expanded_search") rpcName = name;
     return mockChain({ data: [], error: null });
   });
   try {
@@ -249,7 +249,7 @@ Deno.test("min_quality=0 disables quality gating", async () => {
 
   stubFetch();
   stubRpc(supabaseAdmin, (name, args) => {
-    if (name !== "increment_access_count") rpcArgs = args;
+    if (name === "hybrid_search_thoughts") rpcArgs = args;
     return mockChain({ data: [], error: null });
   });
   try {
@@ -267,7 +267,7 @@ Deno.test("custom min_quality=0.7 passes through to RPC", async () => {
 
   stubFetch();
   stubRpc(supabaseAdmin, (name, args) => {
-    if (name !== "increment_access_count") rpcArgs = args;
+    if (name === "hybrid_search_thoughts") rpcArgs = args;
     return mockChain({ data: [], error: null });
   });
   try {
@@ -286,7 +286,7 @@ Deno.test("min_quality passes through with graph_expanded_search", async () => {
 
   stubFetch();
   stubRpc(supabaseAdmin, (name, args) => {
-    if (name !== "increment_access_count") {
+    if (name === "graph_expanded_search") {
       rpcName = name;
       rpcArgs = args;
     }
