@@ -67,6 +67,15 @@ export interface DreamThemesResult {
   snapshot_date: string;
 }
 
+export interface DreamSynthesisResult {
+  clusters_found: number;
+  clusters_synthesized: number;
+  clusters_skipped_low_coverage: number;
+  avg_coverage: number;
+  avg_cluster_size: number;
+  shadow_deltas: number[] | null;  // first 4 weeks: separated vs combined coverage delta
+}
+
 export interface EntityMention {
   name: string;
   type: "person" | "project" | "tool" | "organization";

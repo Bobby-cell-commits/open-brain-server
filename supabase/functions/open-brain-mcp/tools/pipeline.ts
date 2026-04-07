@@ -216,6 +216,9 @@ async function handleHealth() {
     }
   }
 
+  lines.push("");
+  lines.push("Dream Synthesis: use pipeline(type='runs') to see synthesis results from recent runs");
+
   const overall = alerts.some((a: any) => a.severity === "critical")
     ? "CRITICAL"
     : alerts.length > 0

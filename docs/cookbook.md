@@ -114,8 +114,8 @@ Watch for high `centroid_drift` (> 0.05) sustained across multiple snapshots —
 
 **Brain health check (what /brain-health does):**
 ```
-1. analyze(type="themes") + analyze(type="density") + analyze(type="hubs") + analyze(type="co_occurrence") + thought_stats(days=7) + thought_stats(days=14) + dedup_review(limit=30) + review_stale(action="list") + list_entities(entity_type="tool") + list_entities(entity_type="person") + serendipity_digest()  [all parallel]
-2. Score 7 sections against rubrics (GREEN/YELLOW/RED)
+1. analyze(type="themes") + analyze(type="density") + analyze(type="hubs") + analyze(type="co_occurrence") + thought_stats(days=7) + thought_stats(days=14) + dedup_review(limit=30) + review_stale(action="list") + list_entities(entity_type="tool") + list_entities(entity_type="person") + serendipity_digest() + list_thoughts(type="synthesis", days=14, min_quality=0)  [all parallel]
+2. Score 8 sections against rubrics (GREEN/YELLOW/RED)
 3. Detect cross-metric patterns (attention narrowing, capture-connection gap, etc.)
 4. Diff findings against prior report for longitudinal tracking
 5. Persist to research/brain-health/YYYY-MM-DD-brain-health.md

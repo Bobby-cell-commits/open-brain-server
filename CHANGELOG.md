@@ -6,6 +6,25 @@ When upgrading, apply new migrations with `supabase db push --linked` from the `
 
 ## [Unreleased]
 
+## 2026-04-07b
+
+### Added
+- **Dream Phase C -- insight synthesis.** Automatically generates meta-thoughts from thought clusters. The system finds groups of related thoughts (by theme + entity co-occurrence), synthesizes them into a single insight using LLM, validates with probe QA (no information loss), and inserts as `source='dream'` thoughts linked to evidence via `synthesizes` connections. Additive only -- source thoughts are never compacted or deleted.
+- `find_synthesis_candidates` RPC -- clusters thoughts using shared theme + entity co-occurrence, excludes recently synthesized and previously merged thoughts.
+- `dreamSynthesis()` batch module -- wired into `run-pipeline` via `dream_synthesis: true` body param.
+- `run-dream-synthesis` workflow reference (Sunday 9 AM UTC).
+- `dream-synthesis_test.ts` -- 351 lines of unit tests covering clustering, LLM synthesis, probe QA, insert, and error handling.
+
+### Changed
+- `pipeline(type="health")` now includes synthesis status in health output.
+- Cookbook updated with synthesis composition recipe reference.
+- Tool count unchanged at 16.
+
+### Migrations
+2 new migrations to apply:
+- `20260407000001_dream_synthesis.sql` -- adds `find_synthesis_candidates` RPC, `synthesizes` connection type, Phase A dedup exclusion for synthesis thoughts
+- `20260407000002_fix_synthesis_recursive_cte.sql` -- fixes recursive CTE for candidate clustering, JSON synthesis prompt, and cluster limit
+
 ## 2026-04-07
 
 ### Added

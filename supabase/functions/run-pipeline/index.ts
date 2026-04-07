@@ -10,6 +10,7 @@ import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
 import { dreamDecay } from "../_shared/dream-decay.ts";
 import { dreamThemes } from "../_shared/dream-themes.ts";
+import { dreamSynthesis } from "../_shared/dream-synthesis.ts";
 import { resolveEntities } from "../_shared/entities.ts";
 import { insertThought } from "../_shared/insert-thought.ts";
 
@@ -816,6 +817,7 @@ Deno.serve(async (req) => {
   let runDreamDecay = false;
   let runCoOccurrenceDecay = false;
   let runDreamThemes = false;
+  let runDreamSynthesis = false;
   try {
     const body = await req.json();
     if (body.source && typeof body.source === "string") {
@@ -835,6 +837,9 @@ Deno.serve(async (req) => {
     }
     if (body.dream_themes === true) {
       runDreamThemes = true;
+    }
+    if (body.dream_synthesis === true) {
+      runDreamSynthesis = true;
     }
   } catch {
     // Empty body or invalid JSON — default to "all"
@@ -951,6 +956,19 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Dream Cycle Phase C: insight synthesis (opt-in via dream_synthesis:true)
+  let dreamSynthesisResult = null;
+  if (runDreamSynthesis) {
+    try {
+      dreamSynthesisResult = await dreamSynthesis(OWNER_BRAIN_ID);
+      if (dreamSynthesisResult.clusters_synthesized > 0) {
+        console.log(`Dream synthesis: synthesized ${dreamSynthesisResult.clusters_synthesized} cluster(s)`);
+      }
+    } catch (e) {
+      console.error(`Dream synthesis failed: ${e}`);
+    }
+  }
+
   // --- Pipeline run logging ---
   const executionMs = Date.now() - runStartTime;
   const hasErrors = Object.keys(sources).some((k) => k.endsWith("_error"));
@@ -1005,6 +1023,7 @@ Deno.serve(async (req) => {
       dream_decay: dreamDecayResult,
       co_occurrence_decay: coOccurrenceDecayResult,
       dream_themes: dreamThemesResult,
+      dream_synthesis: dreamSynthesisResult,
       timestamp: new Date().toISOString(),
     }),
     { headers: { "Content-Type": "application/json" } },
