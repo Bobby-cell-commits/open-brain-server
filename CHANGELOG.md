@@ -6,6 +6,21 @@ When upgrading, apply new migrations with `supabase db push --linked` from the `
 
 ## [Unreleased]
 
+## 2026-04-07c
+
+### Added
+- **Docker Compose self-hosting.** One-command deployment: `./start.sh` boots Postgres + pgvector, PostgREST, Edge Runtime, Caddy reverse proxy, and a cron container for scheduled maintenance. Auto-generates all secrets (Postgres password, JWT, MCP access key).
+- `docker/docker-compose.yml` -- 6 services with healthcheck dependency chains.
+- `docker/init/init.sh` -- applies all SQL migrations, seeds secrets, creates owner brain + API key.
+- `docker/main/index.ts` -- Edge Runtime main router dispatching to all Edge Functions.
+- `docker/Caddyfile` -- reverse proxy with Supabase-compatible URL paths (`/functions/v1/*`, `/rest/v1/*`).
+- `docker/crontab` -- scheduled jobs for graph analysis, pipeline ingestion, dream dedup/decay/themes/synthesis, and monitoring.
+- `docker/start.sh` -- entrypoint that generates missing secrets, writes `.env`, and boots the stack.
+- `docker/README.md` -- setup guide with MCP client configuration, Telegram setup, service table, backup instructions, and troubleshooting.
+
+### No migrations required
+Docker ships with all existing migrations applied at init time. No new database changes.
+
 ## 2026-04-07b
 
 ### Added

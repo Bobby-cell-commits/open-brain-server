@@ -1,0 +1,37 @@
+# ══════════════════════════════════════════════════════════════
+# Open Brain — Scheduled Jobs
+# ══════════════════════════════════════════════════════════════
+# Runs inside the cron container via supercronic.
+# Edit schedules as needed. Uses $MCP_ACCESS_KEY from environment.
+#
+# All curls target the Edge Runtime directly (internal Docker network).
+# Logs visible via: docker logs open-brain-cron
+
+# ── Graph analysis cache refresh (daily 05:30 UTC) ──────────
+# Pre-computes O(n²) analysis RPCs. Must run before monitoring.
+30 5 * * * curl -sf -X POST http://functions:9000/refresh-graph-analysis -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -d '{"type":"all"}' --max-time 300
+
+# ── Ingestion: example pipeline sources (2x/day) ────────────
+# These are the default sources. Comment out or change as needed.
+# See docs/ for how to add your own RSS feeds.
+0 6,17 * * * curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"rss"}' --max-time 540
+5 6,17 * * * curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"hf_papers"}' --max-time 540
+10 6,17 * * * curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"emergent_mind"}' --max-time 540
+
+# ── Dream dedup (daily 07:00+18:00 UTC, after ingestion) ────
+0 7,18 * * * curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"none","dream_dedup":true}' --max-time 540
+
+# ── Monitoring (daily 07:30+18:30 UTC, after dedup) ─────────
+30 7,18 * * * curl -sf -X POST http://functions:9000/monitor-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" --max-time 60
+
+# ── Co-occurrence decay (weekly, Sunday 04:00 UTC) ───────────
+0 4 * * 0 curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"none","co_occurrence_decay":true}' --max-time 300
+
+# ── Dream decay (weekly, Sunday 08:00 UTC) ───────────────────
+0 8 * * 0 curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"none","dream_decay":true}' --max-time 540
+
+# ── Dream themes (weekly, Sunday 08:30 UTC) ──────────────────
+30 8 * * 0 curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"none","dream_themes":true}' --max-time 300
+
+# ── Dream synthesis (weekly, Sunday 09:00 UTC) ───────────────
+0 9 * * 0 curl -sf -X POST http://functions:9000/run-pipeline -H "x-brain-key: $MCP_ACCESS_KEY" -H "Content-Type: application/json" -H "x-trigger: cron" -d '{"source":"none","dream_synthesis":true}' --max-time 540

@@ -1,0 +1,29 @@
+# Open Brain reverse proxy
+# Routes external traffic to PostgREST and Edge Runtime.
+#
+# For HTTPS: replace ":80" with your domain name.
+# Caddy will auto-provision a Let's Encrypt certificate.
+# Example: yourdomain.com {
+
+:80 {
+    # Edge Functions — MCP server, Telegram bot, pipeline, etc.
+    # Strips /functions/v1 prefix so edge-runtime sees /<function-name>/...
+    handle_path /functions/v1/* {
+        reverse_proxy functions:9000
+    }
+
+    # PostgREST — RPC calls from supabase-js client
+    handle_path /rest/v1/* {
+        reverse_proxy rest:3000
+    }
+
+    # Health check
+    handle /health {
+        respond "ok" 200
+    }
+
+    # Default: 404
+    handle {
+        respond "Not found" 404
+    }
+}

@@ -1,0 +1,176 @@
+# ══════════════════════════════════════════════════════════════
+# Open Brain — Self-Hosted Stack
+# ══════════════════════════════════════════════════════════════
+# Usage:
+#   cp .env.example .env   # Set OPENROUTER_API_KEY
+#   ./start.sh             # Generates secrets + starts stack
+#
+# Docs: README.md
+
+name: open-brain
+
+services:
+  # ── Postgres + pgvector ──────────────────────────────────────
+  db:
+    image: supabase/postgres:15.8.1.085
+    container_name: open-brain-db
+    restart: unless-stopped
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1024M
+    networks:
+      - open-brain
+
+  # ── Init: migrations + API key seed (runs once) ─────────────
+  init:
+    image: alpine:3.20
+    container_name: open-brain-init
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MCP_ACCESS_KEY: ${MCP_ACCESS_KEY}
+    volumes:
+      - ./init/init.sh:/init.sh:ro
+      - ../openbrain/supabase/migrations:/migrations:ro
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache bash postgresql16-client > /dev/null 2>&1 && /init.sh"]
+    restart: "no"
+    networks:
+      - open-brain
+
+  # ── PostgREST: REST API for all 21 RPC functions ────────────
+  rest:
+    image: postgrest/postgrest:v13.0.2
+    container_name: open-brain-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    environment:
+      PGRST_DB_URI: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: postgres
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - open-brain
+
+  # ── Supabase Edge Runtime: MCP server + Telegram + pipeline ─
+  functions:
+    image: supabase/edge-runtime:v1.71.2
+    container_name: open-brain-functions
+    restart: unless-stopped
+    depends_on:
+      rest:
+        condition: service_started
+      init:
+        condition: service_completed_successfully
+    environment:
+      VERIFY_JWT: "false"
+      SUPABASE_URL: http://caddy:80
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      MCP_ACCESS_KEY: ${MCP_ACCESS_KEY}
+      ADMIN_KEY: ${ADMIN_KEY}
+      OWNER_BRAIN_ID: "00000000-0000-4000-a000-000000000001"
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_SECRET_TOKEN: ${TELEGRAM_SECRET_TOKEN:-}
+      TELEGRAM_ALLOWED_CHAT_ID: ${TELEGRAM_ALLOWED_CHAT_ID:-}
+    volumes:
+      - ../openbrain/supabase/functions:/home/deno/functions:ro
+      - ./main:/home/deno/main:ro
+    command:
+      - start
+      - --main-service
+      - /home/deno/main
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/ > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+    networks:
+      - open-brain
+
+  # ── Caddy: reverse proxy ────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: open-brain-caddy
+    restart: unless-stopped
+    depends_on:
+      functions:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/health > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - open-brain
+
+  # ── Cron: scheduled dream/maintenance jobs ──────────────────
+  cron:
+    image: alpine:3.20
+    container_name: open-brain-cron
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_healthy
+    environment:
+      MCP_ACCESS_KEY: ${MCP_ACCESS_KEY}
+    volumes:
+      - ./crontab:/etc/supercronic/crontab:ro
+    entrypoint: ["/bin/sh", "-c", "apk add --no-cache curl supercronic > /dev/null 2>&1 && supercronic /etc/supercronic/crontab"]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+    networks:
+      - open-brain
+
+volumes:
+  caddy-data:
+
+networks:
+  open-brain:
+    driver: bridge
