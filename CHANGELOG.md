@@ -5,6 +5,12 @@ All notable changes to Open Brain Server are documented here. Format follows [Ke
 When upgrading, apply new migrations with `supabase db push --linked` from the `supabase/` directory.
 
 ## [Unreleased]
+## 2026-04-07e
+
+### Added
+- **LongMemEval benchmark harness.** Full evaluation pipeline: provision isolated brains → bulk ingest dataset → retrieve via MCP → reader LLM generates answers → judge LLM scores correctness. Per-category accuracy breakdown across 6 question types. Resumable JSONL output, markdown summary. CLI: `python -m benchmark longmemeval run`. 60 tests.
+- **Baseline results: 37.2% overall** across 500 questions. Per-category: single-session-user 55.7%, single-session-assistant 69.6%, knowledge-update 52.6%, temporal-reasoning 30.8%, multi-session 18.8%, preference 3.3%. Config: threshold=0.4, limit=20, expand=true, reader=gpt-4o-mini, judge=gpt-4o.
+- **`server.json`** for MCP registry integration.
 
 ## 2026-04-07d
 

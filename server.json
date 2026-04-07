@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Bobby-cell-commits/open-brain",
+  "title": "Open Brain",
+  "description": "Personal knowledge graph with 16 MCP tools. Auto-links, deduplicates, tracks themes, synthesizes.",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/Bobby-cell-commits/open-brain-server",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{supabase_project_ref}.supabase.co/functions/v1/open-brain-mcp/{api_key}/mcp",
+      "variables": {
+        "supabase_project_ref": {
+          "description": "Your Supabase project reference ID",
+          "isRequired": true
+        },
+        "api_key": {
+          "description": "Your Open Brain API key",
+          "isRequired": true,
+          "isSecret": true
+        }
+      }
+    }
+  ]
+}

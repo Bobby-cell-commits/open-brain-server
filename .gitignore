@@ -4,6 +4,8 @@
 pipeline/data/
 pipeline/__pycache__/
 pipeline/logs/
+benchmark/data/
+benchmark/__pycache__/
 __pycache__/
 .pytest_cache/
 supabase/.temp/
