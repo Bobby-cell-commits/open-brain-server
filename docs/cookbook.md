@@ -18,7 +18,7 @@ How to use the 16 MCP tools effectively — patterns, compositions, and non-obvi
 | `get_connections` | Graph traversal from a thought (typed links) | `thought_id` |
 | `list_entities` | Browse extracted entities by frequency | `entity_type`, `min_thoughts=1`, `limit=20` |
 | `weekly_review` | LLM synthesis of recent themes, open loops, next steps | `days=7` |
-| `analyze` | Graph analysis: hubs, density, or sources | `type` (required), `min_connections=5` (hubs) |
+| `analyze` | Graph analysis: hubs, density, sources, co_occurrence, themes | `type` (required), `min_connections=5` (hubs), `theme` (themes mode) |
 | `dedup_review` | Duplicate candidates + zone histogram | `limit=20` |
 | `refresh_salience` | Recompute all salience scores | (none) |
 | `update_thought` | Rewrite content (re-embeds, re-extracts metadata) | `id`, `content` |
@@ -96,7 +96,30 @@ If capture returns `{merged: true}`, the content was >92% similar to an existing
 **Salience refresh:**
 `refresh_salience()` after bulk operations (backfills, merges, large ingestion runs). Salience formula: `recency_decay * ln(access+1) * (1 + 0.1*connections) * (1 + 0.2*merges) * source_weight * pinned_multiplier`. Stale salience = suboptimal list/search ordering.
 
+## Theme Tracking Patterns
+
+**"How has my attention shifted?"**
+`analyze(type="themes")` → all 8 themes with velocity (thoughts/week), lifecycle state (emerging/active/mature/declining/dormant), and centroid drift. Updated weekly by dream batch.
+
+**"Show me ml-research over time"**
+`analyze(type="themes", theme="ml-research")` → weekly snapshot timeline: thought count, new captures, avg quality, velocity, centroid drift.
+
+**"What themes are declining?"**
+`analyze(type="themes")` → filter for `lifecycle_state: "declining"` or `"dormant"`. These are attention gaps.
+
+**"Is a theme splitting?"**
+Watch for high `centroid_drift` (> 0.05) sustained across multiple snapshots — the theme's meaning is shifting.
+
 ## Composition Recipes
+
+**Brain health check (what /brain-health does):**
+```
+1. analyze(type="themes") + analyze(type="density") + analyze(type="hubs") + analyze(type="co_occurrence") + thought_stats(days=7) + thought_stats(days=14) + dedup_review(limit=30) + review_stale(action="list") + list_entities(entity_type="tool") + list_entities(entity_type="person") + serendipity_digest()  [all parallel]
+2. Score 7 sections against rubrics (GREEN/YELLOW/RED)
+3. Detect cross-metric patterns (attention narrowing, capture-connection gap, etc.)
+4. Diff findings against prior report for longitudinal tracking
+5. Persist to research/brain-health/YYYY-MM-DD-brain-health.md
+```
 
 **Discovery-style deep dive (what /discover does manually):**
 ```

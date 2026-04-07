@@ -9,6 +9,7 @@ import { VALID_THEMES } from "../_shared/types.ts";
 import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
 import { dreamDecay } from "../_shared/dream-decay.ts";
+import { dreamThemes } from "../_shared/dream-themes.ts";
 import { resolveEntities } from "../_shared/entities.ts";
 import { insertThought } from "../_shared/insert-thought.ts";
 
@@ -814,6 +815,7 @@ Deno.serve(async (req) => {
   let dreamScanDays: number | undefined;
   let runDreamDecay = false;
   let runCoOccurrenceDecay = false;
+  let runDreamThemes = false;
   try {
     const body = await req.json();
     if (body.source && typeof body.source === "string") {
@@ -830,6 +832,9 @@ Deno.serve(async (req) => {
     }
     if (body.co_occurrence_decay === true) {
       runCoOccurrenceDecay = true;
+    }
+    if (body.dream_themes === true) {
+      runDreamThemes = true;
     }
   } catch {
     // Empty body or invalid JSON — default to "all"
@@ -933,6 +938,19 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Dream Cycle Phase B: theme tracking (opt-in via dream_themes:true)
+  let dreamThemesResult = null;
+  if (runDreamThemes) {
+    try {
+      dreamThemesResult = await dreamThemes(OWNER_BRAIN_ID);
+      if (dreamThemesResult.transitions.length > 0) {
+        console.log(`Dream themes: ${dreamThemesResult.transitions.length} lifecycle transition(s)`);
+      }
+    } catch (e) {
+      console.error(`Dream themes failed: ${e}`);
+    }
+  }
+
   // --- Pipeline run logging ---
   const executionMs = Date.now() - runStartTime;
   const hasErrors = Object.keys(sources).some((k) => k.endsWith("_error"));
@@ -986,6 +1004,7 @@ Deno.serve(async (req) => {
       dream_dedup: dreamDedupResult,
       dream_decay: dreamDecayResult,
       co_occurrence_decay: coOccurrenceDecayResult,
+      dream_themes: dreamThemesResult,
       timestamp: new Date().toISOString(),
     }),
     { headers: { "Content-Type": "application/json" } },

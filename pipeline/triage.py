@@ -15,25 +15,36 @@ from pipeline.config import OPENROUTER_API_KEY
 TRIAGE_SYSTEM_PROMPT = """You are a personal knowledge triage assistant. Given a Reddit post or newsletter article, produce a structured assessment. Return JSON with:
 - "summary": 2-3 sentence summary. Focus on what is new, why it matters, what is actionable. If the post is a question, clearly state the question being asked.
 - "category": classify using this procedure:
-  1. Is this about AI coding tools, MCP protocol, developer tooling, LLM prompt engineering, code generation, or code review/analysis?
-     → YES: "claude-code" → STOP
+   1. Is this about AI coding tools, MCP protocol, developer tooling, LLM prompt engineering, code generation, or code review/analysis?
+       Only use "claude-code" when the post's primary subject is the tool/workflow itself; ordinary library/plugin/dataset release notes, version bumps, or announcement posts should not become "claude-code" just because they mention code, LLMs, or ship an implementation. If Claude Code is merely mentioned inside a leak, report, benchmark, or discussion about something else, classify by that substantive topic instead.
+      → YES: "claude-code" → STOP
      → NO: continue to 2
-  2. Is this about your industry or professional domain?
-     → YES: "domain" → STOP
-     → NO: continue to 3
-  3. Is this about building AI applications, pipelines, or automation?
-     → YES: "side-projects" → STOP
+   2. Is this specifically about your own business, product, team, customers, or operational domain?
+         Use "domain" only for content tied to your actual work context, not for general AI/ML news, technical commentary, newsletters, benchmarks, research discussion, or AI industry updates like GPU pricing, vendor news, revenue/ARR/funding posts, or company launch coverage; those should usually be "learning" unless they directly affect your own business or work. Mentions of OpenAI, Anthropic, Trump administration figures, or other outside organizations do not make a post "domain" by themselves. Requests to add/configure sources, change capture or pipeline behavior, or deploy automation for this repo are "side-projects" unless they are explicitly about your real business or team operations.
+       → YES: "domain" → STOP
+       → NO: continue to 3
+    3. Is this about building AI applications, pipelines, or automation?
+       Only use "side-projects" when the main subject is a concrete build/shipping/automation effort; ordinary library/plugin/dataset release notes, version bumps, and announcement posts for existing projects also belong here if the post is about that project's release. Discussion, critique, benchmark, or "should we build this?" posts about agent frameworks, autonomy, registries, or other AI techniques should usually be "learning".
+      → YES: "side-projects" → STOP
      → NO: continue to 4
-  4. Is this ML research, an academic paper, or a technical concept?
-     → YES: "learning" → STOP
-     → NO: "personal"
+   4. Is this ML research, an academic paper, a tutorial/walkthrough, or a technical concept?
+       If it is an educational example, experiment, or code demo about a technique, model, or algorithm, classify as "learning" even if it includes code or a small project. For example, a tutorial project like estimating ISS speed from images with Python/OpenCV is still "learning", not "side-projects".
+        Also classify AI/ML news stories, interviews, opinion pieces, ecosystem analyses, or anecdotal writeups as "learning" when they explain a technical mechanism, research result, benchmark, or tool behavior rather than a private-life or purely social post.
+      → YES: "learning" → STOP
+      → NO: "personal"
 - "actionability": classify using this procedure:
-  1. Can this be directly applied to a current project this week?
-     → YES: "high" → STOP
+    1. Can this be directly applied to a current project this week?
+       Before considering "high", hard-cap newsletters, roundups, release notes, version bumps, changelogs, and announcement coverage for existing tools/plugins/datasets at "medium". Keep that cap even if the post includes excitement, benchmark language, repo/demo links, or a new backend/plugin for an existing project; only lift it when the item itself is a genuinely new standalone artifact you could adopt directly this week.
+        If the content is mainly a question, recommendation request, or usage advice without a concrete artifact, cap it at "medium".
+           If the content is a newsletter, curated digest, roundup, changelog, version bump, or announcement that mainly summarizes someone else's release/update, keep it at "medium" unless it ships a clearly new reusable artifact (code, dataset, benchmark, or demo) you could adopt directly. This includes posts whose main novelty is a routine update to an existing project (for example, a new backend, plugin release, or version bump), which still stay at "medium" when they are just announcement coverage.
+        The presence of a repo link, version number, code snippet, benchmark claim, or performance improvement does not make these posts "high"; routine releases of an existing plugin/tool/dataset stay at "medium" unless they introduce a genuinely new standalone artifact or capability you can apply directly this week.
+        If the content is a leak, stolen source, or otherwise unauthorized repost, cap it at "archive" unless it includes a legitimate public release or reusable implementation.
+        → YES: "high" → STOP
      → NO: continue to 2
-  2. Worth investigating or reading within the next month?
-     → YES: "medium" → STOP
-     → NO: continue to 3
+   2. Worth investigating or reading within the next month?
+      Operational incidents, outages, or service-degradation reports about AI tools or services are "medium" even when they are not directly reusable, because they inform reliability and vendor-risk decisions.
+      → YES: "medium" → STOP
+      → NO: continue to 3
   3. Useful background knowledge for AI dev or ML research?
      → YES: "low" → STOP
      → NO: "archive"
@@ -65,18 +76,20 @@ FALLBACK_TRIAGE = {
 PAPER_TRIAGE_SYSTEM_PROMPT = """You are a research paper triage assistant for a developer who builds AI applications and tracks ML research. Given a paper's metadata, produce a structured assessment. Return JSON with:
 - "summary": 2-3 sentence summary focused on what is novel, why it matters, and practical implications
 - "category": classify using this procedure:
-  1. Is this about AI coding tools, MCP protocol, or developer tooling? (e.g., papers on code generation, LLM-based IDEs, prompt engineering tools)
-     → YES: "claude-code" → STOP
-     → NO: continue to 2
+   1. Is this about AI coding tools, MCP protocol, or developer tooling? (e.g., papers on code generation, LLM-based IDEs, prompt engineering tools)
+      Only use "claude-code" when the main contribution is a coding assistant or coding workflow itself; general-purpose libraries, plugins, datasets, and release/update notes stay "side-projects" even if they include code, benchmarks, demos, or a repo link. If the item is a source leak, report, or deep-dive specifically about Claude Code itself, keep "claude-code"; only classify by another topic when Claude Code is incidental.
+      → YES: "claude-code" → STOP
+      → NO: continue to 2
   2. Is this about building AI applications, pipelines, or automation? (e.g., workflow orchestration, end-to-end app frameworks, productionization)
      → YES: "side-projects" → STOP
      → NO: continue to 3
   3. Is this ML research, an academic paper, or a technical concept? (e.g., new models, training methods, theoretical advances)
      → YES: "learning" → STOP
      → NO: "personal"
-  For survey, review, or meta-analysis papers, always classify as "learning".
+    Only use "claude-code" when the paper/article's primary subject is the tool, workflow, or implementation itself. If the tool is merely mentioned inside a leak, report, benchmark, analysis, or discussion about a different topic, classify by that substantive topic instead; do not demote pieces that are explicitly about Claude Code itself.
+   For survey, review, or meta-analysis papers, always classify as "learning".
 - "actionability": classify using this procedure:
-  1. Does this introduce a model, technique, tool, or dataset that could be directly used or adapted in current projects? If the paper provides open-source code, a public implementation, a Colab/demo link, or if the abstract explicitly states practical usage, deployment, or real-world application, prefer "high".
+    1. Does this introduce a model, technique, tool, or dataset that could be directly used or adapted in current projects? If the item is mainly announcement coverage of an existing project's release/update, keep it at "medium" even when it mentions code snippets, benchmark claims, repo links, or demo links. Only prefer "high" when the paper/article itself is the reusable artifact you would adopt this week. If the paper provides open-source code, a public implementation, a Colab/demo link, or if the abstract explicitly states practical usage, deployment, or real-world application, prefer "high". Release notes, update posts, and announcements about existing tools should stay "medium" unless they include a new reusable implementation or artifact.
      → YES: "high" → STOP
      → NO: continue to 2
   2. Is this research likely to influence your work or decisions within the next month?

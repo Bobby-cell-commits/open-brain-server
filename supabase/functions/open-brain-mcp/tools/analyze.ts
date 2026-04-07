@@ -60,11 +60,11 @@ async function upsertCache(brainId: string, type: string, result: unknown, durat
 export function registerAnalyze(mcp: McpServer, z: Z): void {
   mcp.tool("analyze", {
     description:
-      "Analyze the knowledge graph. type=hubs finds high-connectivity thoughts, type=density shows connection stats at similarity thresholds, type=sources shows per-source counts and cross-source overlap, type=co_occurrence shows co-occurrence edge health and session stats. Results are cached daily — use force=true for live computation (co_occurrence is always live).",
+      "Analyze the knowledge graph. type=hubs finds high-connectivity thoughts, type=density shows connection stats at similarity thresholds, type=sources shows per-source counts and cross-source overlap, type=co_occurrence shows co-occurrence edge health and session stats, type=themes shows theme lifecycle, velocity, and temporal data. Results are cached daily — use force=true for live computation (co_occurrence and themes are always live).",
     inputSchema: z.object({
       type: z
-        .enum(["hubs", "density", "sources", "co_occurrence"])
-        .describe("Which analysis to run: hubs, density, sources, or co_occurrence"),
+        .enum(["hubs", "density", "sources", "co_occurrence", "themes"])
+        .describe("Which analysis to run: hubs, density, sources, co_occurrence, or themes"),
       min_connections: z
         .coerce.number()
         .int()
@@ -79,8 +79,12 @@ export function registerAnalyze(mcp: McpServer, z: Z): void {
         .optional()
         .default(false)
         .describe("Force live computation instead of reading from cache. Slow — may take 1-2 minutes."),
+      theme: z
+        .string()
+        .optional()
+        .describe("For type=themes: specific theme name for timeline data. Omit for summary of all themes."),
     }),
-    handler: async (args: { type: string; min_connections: number; force: boolean }, ctx: any) => {
+    handler: async (args: { type: string; min_connections: number; force: boolean; theme?: string }, ctx: any) => {
       try {
         const brainId = ctx?.authInfo?.extra?.brainId as string;
         if (!brainId) return { content: [{ type: "text" as const, text: "Error: missing brain context" }], isError: true };
@@ -129,6 +133,31 @@ export function registerAnalyze(mcp: McpServer, z: Z): void {
           return {
             content: [{ type: "text" as const, text: JSON.stringify(data) }],
           };
+        }
+
+        // --- Themes: always live (trivial query) ---
+        if (args.type === "themes") {
+          if (args.theme) {
+            // Timeline for a specific theme
+            const { data, error } = await supabaseAdmin.rpc("get_theme_timeline", {
+              p_brain_id: brainId,
+              p_theme_name: args.theme,
+              p_days: 90,
+            });
+            if (error) throw error;
+            return {
+              content: [{ type: "text" as const, text: JSON.stringify({ theme: args.theme, timeline: data }) }],
+            };
+          } else {
+            // Summary of all themes
+            const { data, error } = await supabaseAdmin.rpc("get_theme_stats", {
+              p_brain_id: brainId,
+            });
+            if (error) throw error;
+            return {
+              content: [{ type: "text" as const, text: JSON.stringify({ themes: data }) }],
+            };
+          }
         }
 
         // --- Density / Hubs: read from cache or force live ---

@@ -32,6 +32,23 @@ export function registerThoughtStats(mcp: McpServer, z: Z): void {
 
         if (error) throw error;
 
+        // Enrich by_theme with velocity and lifecycle from theme tracking
+        const { data: themeStats } = await supabaseAdmin.rpc("get_theme_stats", {
+          p_brain_id: brainId,
+        });
+
+        if (themeStats && data) {
+          const enriched: Record<string, any> = {};
+          for (const ts of themeStats as Array<{ name: string; velocity: number; lifecycle_state: string; thought_count: number }>) {
+            enriched[ts.name] = {
+              count: ts.thought_count,
+              velocity: ts.velocity,
+              lifecycle: ts.lifecycle_state,
+            };
+          }
+          (data as any).theme_tracking = enriched;
+        }
+
         return {
           content: [{ type: "text" as const, text: JSON.stringify(data) }],
         };

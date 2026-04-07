@@ -6,6 +6,31 @@ When upgrading, apply new migrations with `supabase db push --linked` from the `
 
 ## [Unreleased]
 
+## 2026-04-07
+
+### Added
+- **Dream Phase B -- theme tracking.** Themes are now first-class entities with temporal evolution tracking. Weekly batch computes theme membership, velocity (thoughts/week), lifecycle state (emerging/active/mature/declining/dormant), and centroid drift. Pure SQL computation, no LLM calls.
+- `themes`, `theme_thoughts`, `theme_snapshots` tables with RLS.
+- `analyze(type="themes")` -- theme lifecycle timeline, velocity, centroid drift. Optionally pass `theme` param for single-theme deep dive.
+- `thought_stats` enriched with per-theme velocity and lifecycle data.
+- `dream-themes.ts` batch module -- wired into `run-pipeline` via `dream_themes: true` body param.
+- `run-dream-themes` workflow reference (Sunday 8:30 UTC).
+- 3 new test files: dream-themes unit tests, analyze themes tests, thought-stats enrichment tests.
+
+### Changed
+- Triage prompts refined for category and actionability classification. Key improvements: newsletters/announcements correctly capped at "medium" actionability, better "domain" vs "learning" boundary, leak/unauthorized content detection. Merged from autoresearch Run 4 (+3.4pp train accuracy, +5.1pp category accuracy).
+- Cookbook updated with theme tracking patterns and composition recipes.
+- Tool count unchanged at 16.
+
+### Removed
+- `get-thought-embeddings_test.ts` integration test (functionality covered by unit tests).
+
+### Migrations
+3 new migrations to apply:
+- `20260406000004_theme_tables.sql` -- adds `themes`, `theme_thoughts`, `theme_snapshots` tables with RLS
+- `20260406000005_theme_backfill.sql` -- seeds 8 theme rows, backfills junction table from JSONB metadata, computes initial centroids and snapshot
+- `20260406000006_theme_rpcs.sql` -- 6 RPCs: theme queries, velocity computation, lifecycle classification, centroid management
+
 ## 2026-04-06
 
 ### Added

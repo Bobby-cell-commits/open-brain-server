@@ -215,3 +215,55 @@ Deno.test("missing brain context returns error", async () => {
   assertEquals(result.isError, true);
   assertStringIncludes(result.content[0].text, "missing brain context");
 });
+
+// --- themes mode ---
+
+Deno.test("themes: returns all themes summary via get_theme_stats", async () => {
+  const themeData = [
+    { name: "ml-research", description: "ML research", lifecycle_state: "active", velocity: 5.2, thought_count: 200, centroid_drift: 0.02, latest_snapshot_date: "2026-04-06" },
+    { name: "personal", description: "Personal", lifecycle_state: "mature", velocity: 1.5, thought_count: 80, centroid_drift: 0.01, latest_snapshot_date: "2026-04-06" },
+  ];
+
+  stubRpc(supabaseAdmin, () => mockChain({ data: themeData, error: null }));
+  try {
+    const result = await handler({ type: "themes", min_connections: 5, force: false }, mockCtx());
+    assertEquals(result.isError, undefined);
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.themes.length, 2);
+    assertEquals(parsed.themes[0].name, "ml-research");
+    assertEquals(parsed.themes[0].lifecycle_state, "active");
+  } finally {
+    restore(supabaseAdmin);
+  }
+});
+
+Deno.test("themes: returns timeline for specific theme", async () => {
+  const timelineData = [
+    { snapshot_date: "2026-03-30", thought_count: 180, new_thoughts: 5, avg_quality: 0.65, avg_salience: 0.4, velocity: 4.8, centroid_drift: 0.01, lifecycle_state: "active" },
+    { snapshot_date: "2026-04-06", thought_count: 200, new_thoughts: 8, avg_quality: 0.68, avg_salience: 0.45, velocity: 5.2, centroid_drift: 0.02, lifecycle_state: "active" },
+  ];
+
+  stubRpc(supabaseAdmin, (_name: string, args: any) => {
+    assertEquals(args.p_theme_name, "ml-research");
+    return mockChain({ data: timelineData, error: null });
+  });
+  try {
+    const result = await handler({ type: "themes", theme: "ml-research", min_connections: 5, force: false }, mockCtx());
+    assertEquals(result.isError, undefined);
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.theme, "ml-research");
+    assertEquals(parsed.timeline.length, 2);
+  } finally {
+    restore(supabaseAdmin);
+  }
+});
+
+Deno.test("themes: RPC error returns isError", async () => {
+  stubRpc(supabaseAdmin, () => mockChain({ data: null, error: { message: "rpc timeout" } }));
+  try {
+    const result = await handler({ type: "themes", min_connections: 5, force: false }, mockCtx());
+    assertEquals(result.isError, true);
+  } finally {
+    restore(supabaseAdmin);
+  }
+});

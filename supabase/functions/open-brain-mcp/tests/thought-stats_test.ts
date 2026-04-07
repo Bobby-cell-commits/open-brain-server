@@ -15,6 +15,7 @@ Deno.test("no days passes null to days_back RPC param", async () => {
   let capturedArgs: any;
 
   stubRpc(supabaseAdmin, (name, args) => {
+    if (name === "get_theme_stats") return mockChain({ data: null, error: null });
     capturedName = name;
     capturedArgs = args;
     return mockChain({ data: { total: 42, by_type: {} }, error: null });
@@ -33,7 +34,8 @@ Deno.test("no days passes null to days_back RPC param", async () => {
 Deno.test("with days passes value to days_back", async () => {
   let capturedArgs: any;
 
-  stubRpc(supabaseAdmin, (_name, args) => {
+  stubRpc(supabaseAdmin, (name, args) => {
+    if (name === "get_theme_stats") return mockChain({ data: null, error: null });
     capturedArgs = args;
     return mockChain({ data: { total: 10 }, error: null });
   });
@@ -49,10 +51,15 @@ Deno.test("with days passes value to days_back", async () => {
 Deno.test("returns stats data as JSON", async () => {
   const statsData = { total: 100, by_type: { idea: 40, task: 30 }, top_topics: ["ai", "tools"] };
 
-  stubRpc(supabaseAdmin, () => mockChain({ data: statsData, error: null }));
+  stubRpc(supabaseAdmin, (name) => {
+    if (name === "get_theme_stats") return mockChain({ data: null, error: null });
+    return mockChain({ data: statsData, error: null });
+  });
   try {
     const result = await handler({}, mockCtx());
-    assertEquals(JSON.parse(result.content[0].text), statsData);
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.total, statsData.total);
+    assertEquals(parsed.by_type, statsData.by_type);
   } finally {
     restore(supabaseAdmin);
   }
@@ -78,7 +85,10 @@ Deno.test("returns by_theme in stats data", async () => {
     top_people: [{ person: "alice", count: 5 }],
   };
 
-  stubRpc(supabaseAdmin, () => mockChain({ data: statsData, error: null }));
+  stubRpc(supabaseAdmin, (name) => {
+    if (name === "get_theme_stats") return mockChain({ data: null, error: null });
+    return mockChain({ data: statsData, error: null });
+  });
   try {
     const result = await handler({}, mockCtx());
     const parsed = JSON.parse(result.content[0].text);
@@ -92,4 +102,51 @@ Deno.test("missing brain context returns error", async () => {
   const result = await handler({});
   assertEquals(result.isError, true);
   assertStringIncludes(result.content[0].text, "missing brain context");
+});
+
+Deno.test("includes theme_tracking with velocity and lifecycle", async () => {
+  const statsData = {
+    total_thoughts: 100,
+    by_type: { idea: 40 },
+    by_theme: { "ml-research": 50, "personal": 30 },
+    top_topics: [],
+    top_people: [],
+  };
+  const themeStatsData = [
+    { name: "ml-research", velocity: 5.2, lifecycle_state: "active", thought_count: 50 },
+    { name: "personal", velocity: 1.5, lifecycle_state: "mature", thought_count: 30 },
+  ];
+
+  stubRpc(supabaseAdmin, (name: string) => {
+    if (name === "thought_stats") return mockChain({ data: statsData, error: null });
+    if (name === "get_theme_stats") return mockChain({ data: themeStatsData, error: null });
+    return mockChain({ data: null, error: null });
+  });
+  try {
+    const result = await handler({}, mockCtx());
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.theme_tracking["ml-research"].velocity, 5.2);
+    assertEquals(parsed.theme_tracking["ml-research"].lifecycle, "active");
+    assertEquals(parsed.theme_tracking["personal"].lifecycle, "mature");
+  } finally {
+    restore(supabaseAdmin);
+  }
+});
+
+Deno.test("thought_stats works when theme_tracking RPC fails", async () => {
+  const statsData = { total_thoughts: 100, by_type: { idea: 40 } };
+
+  stubRpc(supabaseAdmin, (name: string) => {
+    if (name === "thought_stats") return mockChain({ data: statsData, error: null });
+    if (name === "get_theme_stats") return mockChain({ data: null, error: { message: "no themes table" } });
+    return mockChain({ data: null, error: null });
+  });
+  try {
+    const result = await handler({}, mockCtx());
+    // Should still return base stats even if theme enrichment fails
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.total_thoughts, 100);
+  } finally {
+    restore(supabaseAdmin);
+  }
 });

@@ -60,6 +60,13 @@ export interface DreamDecayResult {
   pending_review: number;
 }
 
+export interface DreamThemesResult {
+  themes_processed: number;
+  thoughts_assigned: number;
+  transitions: Array<{ theme: string; from: string; to: string }>;
+  snapshot_date: string;
+}
+
 export interface EntityMention {
   name: string;
   type: "person" | "project" | "tool" | "organization";
