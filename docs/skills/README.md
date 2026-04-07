@@ -45,24 +45,29 @@ pressure, and cross-metric pattern detection.
 - 6 cross-metric pattern detectors (volume/quality tradeoff, feed staleness, source redundancy, cluster deepening, graph fragmentation, dedup drift)
 - TRACKER.md correlation (distinguishes "addressed by recent work" from "open problem")
 
+### /brain-health — Knowledge Graph Health Report
+
+Rubric-scored assessment of your knowledge graph structure and quality.
+Evaluates theme attention balance, graph density, hub health, co-occurrence
+alignment, dedup pressure, stale thought queue, synthesis output, entity
+landscape, and cross-metric patterns.
+
+**Files:**
+- `brain-health/SKILL.md` — Full specification with 10 report sections
+
+**Key features:**
+- 12 parallel MCP tool calls for comprehensive data gathering
+- GREEN/YELLOW/RED rubric scoring per section
+- Cross-run memory (same system as /pulse — findings tracked with new/stable/worsened/improved labels)
+- 5 cross-metric pattern detectors (attention narrowing, capture-connection gap, velocity-quality divergence, entity concentration, stale accumulation)
+- Serendipity digest integration (resurfaces forgotten high-quality thoughts)
+
 ## Using These Skills
 
 ### With Claude Code
 
-Place skill directories under `.claude/skills/` in your project (project-scoped)
-or `~/.claude/skills/` (global). Claude Code discovers them automatically.
-
-```bash
-# Project-scoped
-cp -r docs/skills/discover .claude/skills/
-cp -r docs/skills/pulse .claude/skills/
-
-# Global (available across all projects)
-cp -r docs/skills/discover ~/.claude/skills/
-cp -r docs/skills/pulse ~/.claude/skills/
-```
-
-Then invoke with `/discover` or `/pulse` in Claude Code.
+Skills are included in `.claude/skills/` and are discovered automatically
+by Claude Code. Invoke with `/discover`, `/pulse`, or `/brain-health`.
 
 ### As Reference
 

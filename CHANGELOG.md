@@ -6,6 +6,15 @@ When upgrading, apply new migrations with `supabase db push --linked` from the `
 
 ## [Unreleased]
 
+## 2026-04-07d
+
+### Added
+- **`/brain-health` skill.** Knowledge graph health report -- 12 parallel MCP calls covering theme attention, graph density, hub health, co-occurrence alignment, dedup pressure, stale queue, synthesis output, entity landscape, and serendipity. Rubric-scored (GREEN/YELLOW/RED) with cross-run memory and 5 cross-metric pattern detectors.
+
+### Changed
+- **Skills are now functional.** Discover, pulse, and brain-health skills moved from `docs/skills/` (read-only showcase) to `.claude/skills/` (auto-discovered by Claude Code). Cloning the repo gives you working `/discover`, `/pulse`, and `/brain-health` slash commands immediately.
+- **README rewritten** to reflect current feature surface. Adds: deployment options (Supabase vs Docker), knowledge graph explanation, skills section, automated maintenance table (8 scheduled jobs), updated tools table (16 tools), and corrected project structure.
+
 ## 2026-04-07c
 
 ### Added
