@@ -1,0 +1,38 @@
+name: Send Serendipity Digest
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily at 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  send-serendipity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send serendipity digest via Telegram
+        env:
+          SUPABASE_FUNCTIONS_URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          MCP_ACCESS_KEY: ${{ secrets.MCP_ACCESS_KEY }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "$SUPABASE_FUNCTIONS_URL/run-pipeline" \
+            -H "Content-Type: application/json" \
+            -H "x-brain-key: $MCP_ACCESS_KEY" \
+            -H "x-trigger: github_actions" \
+            -d '{"source": "none", "serendipity": true}' \
+            --max-time 60)
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" = "200" ]; then
+            slots=$(echo "$body" | jq -r '.serendipity.slots_sent // 0')
+            echo "::notice::Serendipity digest sent: $slots slot(s)"
+            exit 0
+          fi
+
+          echo "::error::Serendipity digest failed (status: $http_code)"
+          exit 1

@@ -28,7 +28,7 @@ Deno.test("returns empty result when no themes exist", async () => {
 });
 
 Deno.test("populates junction and takes snapshot for themes", async () => {
-  const themes = [makeTheme("ml-research"), makeTheme("personal", 1.0, "active", 20)];
+  const themes = [makeTheme("ml-research"), makeTheme("developer-experience", 1.0, "active", 20)];
   let rpcCalls: Array<{ name: string; args: any }> = [];
   let fromCalls: Array<{ table: string }> = [];
 
@@ -47,7 +47,7 @@ Deno.test("populates junction and takes snapshot for themes", async () => {
       return mockChain({
         data: [
           { theme_name: "ml-research", cnt: 8 },
-          { theme_name: "personal", cnt: 2 },
+          { theme_name: "developer-experience", cnt: 2 },
         ],
         error: null,
       });
@@ -191,7 +191,7 @@ Deno.test("detects declining transition when velocity drops below 2 for 2+ weeks
 });
 
 Deno.test("detects recovery from dormant to active", async () => {
-  const themes = [makeTheme("side-projects", 0, "dormant", 15)];
+  const themes = [makeTheme("security", 0, "dormant", 15)];
 
   stubFrom(supabaseAdmin, (table: string) => {
     if (table === "themes") return mockChain({ data: themes, error: null });
@@ -203,7 +203,7 @@ Deno.test("detects recovery from dormant to active", async () => {
   stubRpc(supabaseAdmin, (name: string) => {
     if (name === "populate_theme_thoughts") return mockChain({ data: 3, error: null });
     if (name === "count_new_theme_thoughts") {
-      return mockChain({ data: [{ theme_name: "side-projects", cnt: 3 }], error: null });
+      return mockChain({ data: [{ theme_name: "security", cnt: 3 }], error: null });
     }
     if (name === "update_theme_centroid") return mockChain({ data: 0.05, error: null });
     return mockChain({ data: null, error: null });
@@ -211,7 +211,7 @@ Deno.test("detects recovery from dormant to active", async () => {
 
   try {
     const result = await dreamThemes(TEST_BRAIN_ID);
-    const transition = result.transitions.find((t) => t.theme === "side-projects");
+    const transition = result.transitions.find((t) => t.theme === "security");
     assertEquals(transition?.from, "dormant");
     assertEquals(transition?.to, "active");
   } finally {

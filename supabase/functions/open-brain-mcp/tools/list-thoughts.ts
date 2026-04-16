@@ -11,13 +11,14 @@ type Z = typeof import("npm:zod@3");
 export function registerListThoughts(mcp: McpServer, z: Z): void {
   mcp.tool("list_thoughts", {
     description:
-      "List thoughts filtered by type, topic, person, theme, or time window",
+      "List thoughts filtered by type, topic, person, theme, activity, or time window",
     inputSchema: z.object({
       type: z.string().optional().describe("Filter by thought type"),
       source: z.string().optional().describe("Filter by capture source (e.g. telegram, reddit, rss, mcp)"),
       topic: z.string().optional().describe("Filter by topic tag"),
       person: z.string().optional().describe("Filter by person mentioned"),
       theme: z.string().optional().describe("Filter by theme (e.g. ml-research, ai-coding-tools, knowledge-systems)"),
+      activity: z.string().optional().describe("Filter by activity label (e.g. research-paper, community-discussion, project-showcase)"),
       min_quality: z.coerce.number().optional().default(0.4).describe("Minimum quality score 0-1 (default 0.4). Set to 0 to disable quality gating."),
       since: z.string().optional().describe("ISO timestamp — only thoughts created after this"),
       days: z.coerce.number().optional().describe("Only thoughts from last N days"),
@@ -33,6 +34,7 @@ export function registerListThoughts(mcp: McpServer, z: Z): void {
       topic?: string;
       person?: string;
       theme?: string;
+      activity?: string;
       min_quality: number;
       since?: string;
       days?: number;
@@ -82,6 +84,11 @@ export function registerListThoughts(mcp: McpServer, z: Z): void {
         // Theme filter: JSONB text extraction
         if (args.theme) {
           query = query.filter("metadata->>theme", "eq", args.theme);
+        }
+
+        // Activity filter: JSONB text extraction
+        if (args.activity) {
+          query = query.filter("metadata->>activity", "eq", args.activity);
         }
 
         // Quality filter: intentional sources (telegram, mcp) bypass the gate

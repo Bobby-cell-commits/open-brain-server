@@ -6,7 +6,7 @@ import {
   chatCompletion as _chatCompletion,
 } from "../../_shared/openrouter.ts";
 import { supabaseAdmin } from "../../_shared/supabase-client.ts";
-import { checkDedup, storeConnections } from "../../_shared/auto-link.ts";
+import { checkDedup, storeConnections, storeEntityBridges } from "../../_shared/auto-link.ts";
 import { resolveEntities } from "../../_shared/entities.ts";
 import { insertThought } from "../../_shared/insert-thought.ts";
 import { sendMessage, setReaction, formatConfirmation } from "../telegram.ts";
@@ -56,24 +56,73 @@ Return JSON with:
   1. About AI-powered coding tools, code completion, or code generation?
      → YES: "ai-coding-tools" → STOP
      → NO: continue to 2
-  2. About ML research, models, training, or academic papers?
+  2. About ML research, models, training, benchmarks, or academic papers?
      → YES: "ml-research" → STOP
      → NO: continue to 3
-  3. About knowledge management, memory systems, RAG, or search?
+  3. About knowledge management, memory systems, RAG, search, or PKM tools?
      → YES: "knowledge-systems" → STOP
      → NO: continue to 4
-  4. About infrastructure, deployment, databases, or DevOps?
-     → YES: "infrastructure" → STOP
+  4. About chip architecture, embedded systems, FPGA, semiconductors, or electronics?
+     → YES: "hardware-systems" → STOP
      → NO: continue to 5
-  5. About developer workflows, tooling, or productivity?
-     → YES: "developer-experience" → STOP
+  5. About infrastructure, deployment, databases, DevOps, cloud, or systems programming?
+     → YES: "infrastructure" → STOP
      → NO: continue to 6
-  6. About a personal side project or building something?
-     → YES: "side-projects" → STOP
+  6. About developer workflows, tooling, or the craft of software engineering?
+     → YES: "developer-experience" → STOP
      → NO: continue to 7
-  7. About industry trends, company news, or market dynamics?
-     → YES: "industry-trends" → STOP
-     → NO: "personal"
+  7. About vulnerability research, cryptography, privacy, or security threats?
+     → YES: "security" → STOP
+     → NO: continue to 8
+  8. About bioinformatics, scientific workflows, statistical computing, or Julia/R ecosystem?
+     → YES: "scientific-computing" → STOP
+     → NO: continue to 9
+  9. About AI regulation, privacy law, tech policy, or compliance?
+     → YES: "regulation-policy" → STOP
+     → NO: continue to 10
+  10. About structural tech analysis, compute economics, business models, or market sizing?
+      → YES: "tech-economics" → STOP
+      → NO: continue to 11
+  11. About industry news, company announcements, product launches, or ecosystem shifts?
+      → YES: "industry-trends" → STOP
+      → NO: Pick the closest theme from steps 1-11.
+
+  Theme anti-patterns — common mistakes to avoid:
+  - Newsletter roundups about AI companies or model releases → "industry-trends", NOT "career-personal"
+  - Academic paper summaries from arXiv or HuggingFace → "ml-research", NOT "opinion"
+  - Career advice, interview tips, workplace culture → theme "developer-experience", activity "career-personal"
+  - Self-hosting or monitoring tool questions → "infrastructure", NOT "career-personal"
+  - Humor/memes about a technology topic → use that topic's theme, NOT "career-personal"
+  - Someone built a RAG pipeline as a weekend project → theme "knowledge-systems", activity "project-showcase"
+  - EU AI Act analysis → "regulation-policy", NOT "industry-trends"
+  - SemiAnalysis chip breakdown → "hardware-systems", NOT "infrastructure"
+  - Benedict Evans annual letter → "tech-economics", NOT "industry-trends"
+
+- "activity": classify using this procedure:
+  1. Is this an academic paper, preprint, or formal study?
+     → YES: "research-paper" → STOP
+     → NO: continue to 2
+  2. Is this a discussion thread, debate, Q&A, or community conversation?
+     → YES: "community-discussion" → STOP
+     → NO: continue to 3
+  3. Is this someone demonstrating or releasing a project they built?
+     → YES: "project-showcase" → STOP
+     → NO: continue to 4
+  4. Is this a product launch, release note, pricing change, or company news?
+     → YES: "announcement" → STOP
+     → NO: continue to 5
+  5. Is this a periodic survey, benchmark report, or data-driven industry analysis?
+     → YES: "industry-report" → STOP
+     → NO: continue to 6
+  6. Is this a how-to, guide, walkthrough, or educational content?
+     → YES: "tutorial" → STOP
+     → NO: continue to 7
+  7. Is this career advice, job search, work-life balance, or non-technical reflection?
+     → YES: "career-personal" → STOP
+     → NO: continue to 8
+  8. Is this an opinion piece, hot take, commentary, or editorial?
+     → YES: "opinion" → STOP
+     → NO: "opinion"
 
 - "topics": array of 2-3 specific topic tags, lowercase hyphenated.
   Tags should be specific enough that searching for one returns a focused set, not half the database.
@@ -164,6 +213,11 @@ export async function handleCapture(message: TelegramMessage): Promise<void> {
       await resolveEntities(OWNER_BRAIN_ID, metadata.entities, result.id);
     }
 
+    // Store entity bridges (post-insert, best-effort)
+    if (metadata.entities && Array.isArray(metadata.entities)) {
+      await storeEntityBridges(OWNER_BRAIN_ID, result.id);
+    }
+
     // Confirmation reply
     let confirmText = formatConfirmation(metadata);
     if (connections.length > 0) {
@@ -173,7 +227,9 @@ export async function handleCapture(message: TelegramMessage): Promise<void> {
 
     await sendMessage(chatId, confirmText, { reply_to_message_id: messageId });
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = err instanceof Error ? err.message
+      : (typeof err === "object" && err !== null && "message" in err) ? String((err as Record<string, unknown>).message)
+      : String(err);
     console.error("Telegram capture failed:", errMsg);
     await sendMessage(
       chatId,

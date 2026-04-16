@@ -221,7 +221,7 @@ Deno.test("missing brain context returns error", async () => {
 Deno.test("themes: returns all themes summary via get_theme_stats", async () => {
   const themeData = [
     { name: "ml-research", description: "ML research", lifecycle_state: "active", velocity: 5.2, thought_count: 200, centroid_drift: 0.02, latest_snapshot_date: "2026-04-06" },
-    { name: "personal", description: "Personal", lifecycle_state: "mature", velocity: 1.5, thought_count: 80, centroid_drift: 0.01, latest_snapshot_date: "2026-04-06" },
+    { name: "developer-experience", description: "Developer experience", lifecycle_state: "mature", velocity: 1.5, thought_count: 80, centroid_drift: 0.01, latest_snapshot_date: "2026-04-06" },
   ];
 
   stubRpc(supabaseAdmin, () => mockChain({ data: themeData, error: null }));

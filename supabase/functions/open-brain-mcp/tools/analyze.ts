@@ -33,6 +33,8 @@ async function runLiveAnalysis(brainId: string, type: string): Promise<unknown> 
         return await sql`SELECT * FROM analysis_rich_thoughts(${brainId}::uuid, 5)`;
       case "source_pairs":
         return await sql`SELECT * FROM analysis_source_pairs(${brainId}::uuid)`;
+      case "synthesis_candidates":
+        return await sql`SELECT * FROM find_synthesis_candidates(${brainId}::uuid, 3, 12, 0.75, 20)`;
       default:
         throw new Error(`Unknown analysis type: ${type}`);
     }
@@ -60,11 +62,11 @@ async function upsertCache(brainId: string, type: string, result: unknown, durat
 export function registerAnalyze(mcp: McpServer, z: Z): void {
   mcp.tool("analyze", {
     description:
-      "Analyze the knowledge graph. type=hubs finds high-connectivity thoughts, type=density shows connection stats at similarity thresholds, type=sources shows per-source counts and cross-source overlap, type=co_occurrence shows co-occurrence edge health and session stats, type=themes shows theme lifecycle, velocity, and temporal data. Results are cached daily — use force=true for live computation (co_occurrence and themes are always live).",
+      "Analyze the knowledge graph. type=hubs finds high-connectivity thoughts, type=density shows connection stats at similarity thresholds, type=sources shows per-source counts and cross-source overlap, type=co_occurrence shows co-occurrence edge health and session stats, type=themes shows theme lifecycle, velocity, and temporal data, type=synthesis_candidates shows pending thought clusters ready for Dream Phase C synthesis. Results are cached daily — use force=true for live computation (co_occurrence and themes are always live).",
     inputSchema: z.object({
       type: z
-        .enum(["hubs", "density", "sources", "co_occurrence", "themes"])
-        .describe("Which analysis to run: hubs, density, sources, co_occurrence, or themes"),
+        .enum(["hubs", "density", "sources", "co_occurrence", "themes", "synthesis_candidates"])
+        .describe("Which analysis to run: hubs, density, sources, co_occurrence, themes, or synthesis_candidates"),
       min_connections: z
         .coerce.number()
         .int()
@@ -158,6 +160,42 @@ export function registerAnalyze(mcp: McpServer, z: Z): void {
               content: [{ type: "text" as const, text: JSON.stringify({ themes: data }) }],
             };
           }
+        }
+
+        // --- Synthesis candidates: read from cache or force live ---
+        if (args.type === "synthesis_candidates") {
+          if (!args.force) {
+            const cached = await readCache(brainId, "synthesis_candidates");
+            if (cached) {
+              return {
+                content: [{
+                  type: "text" as const,
+                  text: JSON.stringify({ data: cached.result, cached_at: cached.computed_at }),
+                }],
+              };
+            }
+
+            return {
+              content: [{
+                type: "text" as const,
+                text: "No cached synthesis candidates available. Run with force=true for live computation, or wait for the daily refresh.",
+              }],
+              isError: true,
+            };
+          }
+
+          // Force live computation
+          const start = Date.now();
+          const data = await runLiveAnalysis(brainId, "synthesis_candidates");
+          const durationMs = Date.now() - start;
+          await upsertCache(brainId, "synthesis_candidates", data, durationMs);
+
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({ data, computed_at: new Date().toISOString() }),
+            }],
+          };
         }
 
         // --- Density / Hubs: read from cache or force live ---

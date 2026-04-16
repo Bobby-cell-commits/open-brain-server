@@ -5,7 +5,9 @@ import requests
 
 from pipeline.config import (
     MONITORED_SUBREDDITS, REDDIT_USER_AGENT, ITEM_DELAY_SECONDS,
-    SUBREDDIT_CONFIG, VISION_ALLOWED_SUBS,
+    SUBREDDIT_CONFIG, VISION_ALLOWED_SUBS, TRIAGE_GATED_SUBS,
+    COMMENT_ENABLED_SUBS, COMMENT_SCORE_THRESHOLD,
+    COMMENT_MAX_PER_POST, COMMENT_MIN_POST_COMMENTS,
 )
 from pipeline.dedup import DedupTracker
 from pipeline.triage import triage, is_image_url, is_video_url, is_deleted_content
@@ -27,6 +29,48 @@ def fetch_hot(subreddit: str, limit: int = 10) -> list[dict]:
         for child in data["data"]["children"]
         if child["kind"] == "t3" and not child["data"].get("stickied")
     ]
+
+
+def fetch_top_comments(post_id: str, subreddit: str,
+                       score_threshold: int = COMMENT_SCORE_THRESHOLD,
+                       max_comments: int = COMMENT_MAX_PER_POST) -> list[dict]:
+    """Fetch top comments for a post, filtered by score and content.
+
+    Returns list of dicts with 'body' and 'score' keys, sorted by score descending.
+    Returns empty list on any error (non-blocking).
+    """
+    try:
+        resp = requests.get(
+            f"https://www.reddit.com/r/{subreddit}/comments/{post_id}.json",
+            headers={"User-Agent": REDDIT_USER_AGENT},
+            params={"sort": "top", "limit": 20, "raw_json": 1},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception:
+        return []
+
+    if not isinstance(data, list) or len(data) < 2:
+        return []
+
+    raw_comments = data[1].get("data", {}).get("children", [])
+    filtered = []
+    for c in raw_comments:
+        if c.get("kind") != "t1":
+            continue
+        body = c["data"].get("body", "")
+        score = c["data"].get("score", 0)
+        if score < score_threshold:
+            continue
+        if body in ("[removed]", "[deleted]"):
+            continue
+        if "I am a bot" in body:
+            continue
+        filtered.append({"body": body[:500], "score": score})
+
+    filtered.sort(key=lambda x: x["score"], reverse=True)
+    return filtered[:max_comments]
 
 
 def _detect_image_url(post: dict) -> str | None:
@@ -72,7 +116,8 @@ def _should_skip_post(post: dict, subreddit: str) -> str | None:
     return None
 
 
-def format_enriched_content(post: dict, triage_result: dict) -> str:
+def format_enriched_content(post: dict, triage_result: dict,
+                            comments: list[dict] | None = None) -> str:
     """Format enriched content string for Open Brain capture."""
     subreddit = post["subreddit"]
     title = post["title"]
@@ -98,6 +143,11 @@ def format_enriched_content(post: dict, triage_result: dict) -> str:
         lines.append(f"Tools: {tools}")
 
     lines += ["", "Original content:", body]
+
+    if comments:
+        lines += ["", "Notable comments:"]
+        for c in comments:
+            lines.append(f"- [score={c['score']}] {c['body']}")
 
     lines += [
         "",
@@ -160,11 +210,29 @@ def process_subreddits(limit_per_sub: int = 10, dry_run: bool = False) -> dict:
 
                 triage_result = triage(triage_input, image_url=image_url)
 
-                enriched = format_enriched_content(post, triage_result)
+                # Triage gate: filter noise based on actionability
+                actionability = triage_result.get("actionability", "low")
+                if actionability == "archive" or (
+                    actionability == "low" and sub in TRIAGE_GATED_SUBS
+                ):
+                    tracker.mark_processed(fullname, f"reddit-{sub}-filtered")
+                    stats["filtered"] += 1
+                    print(f"    Filtered ({actionability})")
+                    continue
+
+                # Fetch top comments for comment-enabled subs
+                comments = []
+                if (sub in COMMENT_ENABLED_SUBS
+                        and post.get("num_comments", 0) >= COMMENT_MIN_POST_COMMENTS):
+                    comments = fetch_top_comments(post["id"], sub)
+
+                enriched = format_enriched_content(post, triage_result, comments)
                 capture_thought(enriched, source="reddit", source_event_id=fullname)
                 tracker.mark_processed(fullname, f"reddit-{sub}")
                 stats["captured"] += 1
-                label = "vision" if image_url else triage_result.get("actionability", "?")
+                label = "vision" if image_url else actionability
+                if comments:
+                    label += f"+{len(comments)}c"
                 print(f"    Captured ({label})")
 
             except Exception as e:

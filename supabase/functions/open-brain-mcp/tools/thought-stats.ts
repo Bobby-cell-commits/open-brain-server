@@ -11,7 +11,7 @@ type Z = typeof import("npm:zod@3");
 export function registerThoughtStats(mcp: McpServer, z: Z): void {
   mcp.tool("thought_stats", {
     description:
-      "Get aggregate statistics: total thoughts, type breakdown, theme breakdown, top topics, top people. Pass days to limit to last N days.",
+      "Get aggregate statistics: total thoughts, type breakdown, theme breakdown, activity breakdown, top topics, top people. Pass days to limit to last N days.",
     inputSchema: z.object({
       days: z
         .coerce.number()

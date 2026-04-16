@@ -245,3 +245,70 @@ export async function storeConnections(
     return [];
   }
 }
+
+/**
+ * storeEntityBridges: Create entity-based bridge connections for a new thought.
+ * Call AFTER resolveEntities has completed (so thought_entities rows exist).
+ * Best-effort — errors are logged but never rethrown.
+ *
+ * Uses Newman's collaboration weighting: w(entity) = 1/(df-1), summed per pair,
+ * normalized via 1 - exp(-α * raw). See spec for details.
+ */
+export async function storeEntityBridges(
+  brainId: string,
+  newThoughtId: string,
+): Promise<void> {
+  const ALPHA = 1.0;
+
+  try {
+    // Step 1: Get this thought's entities with df counts
+    const { data: entities, error: entErr } = await supabaseAdmin.rpc(
+      "get_thought_entity_ids",
+      { p_brain_id: brainId, p_thought_id: newThoughtId },
+    );
+
+    if (entErr || !entities || entities.length === 0) {
+      if (entErr) console.error("storeEntityBridges entity lookup error:", entErr.message);
+      return;
+    }
+
+    // Step 2: Find all overlapping thoughts with pre-computed raw scores
+    const { data: overlaps, error: overlapErr } = await supabaseAdmin.rpc(
+      "find_entity_overlaps",
+      { p_brain_id: brainId, p_thought_id: newThoughtId },
+    );
+
+    if (overlapErr || !overlaps || overlaps.length === 0) {
+      if (overlapErr) console.error("storeEntityBridges overlap lookup error:", overlapErr.message);
+      return;
+    }
+
+    // Step 3: Compute bridge rows
+    const rows = overlaps.map((o: { thought_id: string; shared_entities: string[]; raw_score: number }) => {
+      const similarity = 1 - Math.exp(-ALPHA * o.raw_score);
+      const [sourceId, targetId] = [newThoughtId, o.thought_id].sort();
+      return {
+        source_thought_id: sourceId,
+        target_thought_id: targetId,
+        similarity,
+        link_type: "entity-bridge",
+        metadata: { shared_entities: o.shared_entities, alpha: ALPHA },
+        brain_id: brainId,
+      };
+    });
+
+    // Step 4: Batch upsert — ON CONFLICT skip if non-entity-bridge edge exists
+    const { error } = await supabaseAdmin
+      .from("thought_connections")
+      .upsert(rows, {
+        onConflict: "source_thought_id,target_thought_id",
+        ignoreDuplicates: true,
+      });
+
+    if (error) {
+      console.error("storeEntityBridges insert error:", error.message);
+    }
+  } catch (err) {
+    console.error("storeEntityBridges error (non-blocking):", err);
+  }
+}

@@ -32,8 +32,12 @@ export function registerSearchThoughts(mcp: McpServer, z: Z): void {
         .optional()
         .default(0.4)
         .describe("Minimum quality score 0-1 (default 0.4). Set to 0 to disable quality gating."),
+      source: z
+        .string()
+        .optional()
+        .describe("Filter by source (telegram, mcp, rss, hf_papers, emergent_mind, reddit, dream). Omit for all sources."),
     }),
-    handler: async (args: { query: string; limit: number; threshold: number; expand: boolean; min_quality: number }, ctx: any) => {
+    handler: async (args: { query: string; limit: number; threshold: number; expand: boolean; min_quality: number; source?: string }, ctx: any) => {
       try {
         const brainId = ctx?.authInfo?.extra?.brainId as string;
         if (!brainId) return { content: [{ type: "text" as const, text: "Error: missing brain context" }], isError: true };
@@ -57,6 +61,7 @@ export function registerSearchThoughts(mcp: McpServer, z: Z): void {
           match_count: limit,
           match_threshold: args.threshold,
           min_quality: args.min_quality,
+          p_source: args.source ?? null,
         });
 
         if (error) throw error;

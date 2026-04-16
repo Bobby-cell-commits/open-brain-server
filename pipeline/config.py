@@ -36,28 +36,23 @@ REDDIT_USER_AGENT = "python:open-brain-pipeline:v1.0"
 # Replace with subreddits relevant to your interests. These are examples
 # from AI/ML/developer communities. Uses public .json endpoints (no auth).
 MONITORED_SUBREDDITS = [
-    # Tier 1 — Keep (high signal, project-relevant)
+    # Tier 1 — High signal (10 posts/run)
     "Python",
-    "ClaudeAI",
+    "ClaudeCode",
     "LocalLLaMA",
-    "AgentsOfAI",
     "MachineLearning",
     "programming",
-    # Tier 1 — New (developer-focused)
-    "ClaudeCode",
-    "clawdbot",
-    "LLMDevs",
     "AI_Agents",
-    # MCP ecosystem
-    "mcp",
-    # Knowledge, NLP, infrastructure
-    "Rag",
-    "PKMS",
     "ExperiencedDevs",
-    "LanguageTechnology",
-    "Supabase",
-    "opensource",
-    # Keep (override from original drop list)
+    "SelfHosted",       # NEW — infra, security, self-hosting (737K subs)
+    "ObsidianMD",       # NEW — PKM, knowledge retention (305K subs, replaces PKMS)
+    # Tier 2 — Moderate signal (5 posts/run)
+    "Rag",
+    "ClaudeAI",
+    "AgentsOfAI",
+    "dataengineering",  # NEW — pipeline architecture, tool comparisons (445K subs)
+    "devops",           # NEW — CI/CD, infrastructure, career (480K subs)
+    # Tier 3 — Low signal (3 posts/run)
     "singularity",
     "accelerate",
 ]
@@ -65,18 +60,36 @@ MONITORED_SUBREDDITS = [
 # Per-sub overrides (limit = max posts to fetch; default is 10)
 SUBREDDIT_CONFIG = {
     "Rag": {"limit": 5},
-    "PKMS": {"limit": 5},
-    "ExperiencedDevs": {"limit": 5},
-    "LanguageTechnology": {"limit": 5},
-    "Supabase": {"limit": 3},
-    "opensource": {"limit": 3},
+    "ClaudeAI": {"limit": 5},
+    "AgentsOfAI": {"limit": 5},
+    "dataengineering": {"limit": 5},
+    "devops": {"limit": 5},
+    "singularity": {"limit": 3},
+    "accelerate": {"limit": 3},
+}
+
+# Subs with triage actionability gate — filter "low" + "archive" to reduce noise.
+# AI-focused subs are NOT gated (opinions are signal for cluster detection).
+# All subs filter "archive" regardless.
+TRIAGE_GATED_SUBS = {
+    "ExperiencedDevs", "SelfHosted", "ObsidianMD",
+    "dataengineering", "devops",
 }
 
 # Subs where image-only posts are allowed (others skip image-only posts)
 VISION_ALLOWED_SUBS = {
     "ClaudeAI", "ClaudeCode", "LocalLLaMA", "MachineLearning",
-    "clawdbot", "AI_Agents", "LLMDevs", "Python", "AgentsOfAI",
+    "AI_Agents", "Python", "AgentsOfAI", "SelfHosted", "ObsidianMD",
 }
+
+# Subs where top comments are fetched and included in captured thoughts
+COMMENT_ENABLED_SUBS = {
+    "ExperiencedDevs", "LocalLLaMA", "MachineLearning", "Python",
+    "SelfHosted", "ObsidianMD",
+}
+COMMENT_SCORE_THRESHOLD = 5
+COMMENT_MAX_PER_POST = 3
+COMMENT_MIN_POST_COMMENTS = 3
 
 # ── Customize: RSS Feeds ──
 # Replace with feeds you follow. These are examples from AI/ML newsletters.
@@ -111,6 +124,9 @@ HF_SCREEN_TITLE_TERMS = [
     'benchmark',
     'efficient',
     'hallucin',
+    # 2026-04-09: widened to capture architecture, optimization, and evaluation papers
+    'transformer', 'attention', 'pruning', 'knowledge', 'reward',
+    'autoregressive', 'test-time', 'alignment', 'code repair', 'program repair',
 ]
 
 HF_KEYWORD_ALLOWLIST = {
@@ -125,6 +141,11 @@ HF_KEYWORD_ALLOWLIST = {
     'reinforcement learning from human feedback',
     'multimodal large language models',
     'language models',
+    # 2026-04-09: expanded to catch papers via ai_keywords when title terms miss
+    'reinforcement learning', 'instruction tuning', 'in-context learning',
+    'knowledge graph', 'knowledge graphs', 'semantic search',
+    'question answering', 'information extraction', 'named entity recognition',
+    'chain-of-thought', 'prompt engineering', 'vision-language models',
 }
 
 HF_UPVOTE_CATCH_ALL = 40

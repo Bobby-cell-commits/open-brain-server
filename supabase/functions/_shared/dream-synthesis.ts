@@ -174,21 +174,28 @@ export async function dreamSynthesis(brainId: string, maxClusters = DEFAULT_MAX_
     shadow_deltas: SHADOW_SCORING_ENABLED ? [] : null,
   };
 
-  // Step 1: Find synthesis candidates
-  const { data: candidates, error } = await supabaseAdmin.rpc("find_synthesis_candidates", {
-    p_brain_id: brainId,
-    p_limit: maxClusters,
-  });
+  // Step 1: Find synthesis candidates (from daily cache)
+  const { data: cached, error: cacheError } = await supabaseAdmin
+    .from("graph_analysis_cache")
+    .select("result")
+    .eq("brain_id", brainId)
+    .eq("analysis_type", "synthesis_candidates")
+    .single();
 
-  if (error) {
-    console.error("dream-synthesis: find_synthesis_candidates failed:", error);
+  if (cacheError || !cached) {
+    console.error("dream-synthesis: no cached synthesis candidates — has refresh-graph-analysis run?", cacheError);
     result.shadow_deltas = null;
     return result;
   }
-  if (!candidates || candidates.length === 0) {
+
+  const allCandidates = cached.result as SynthesisCandidate[];
+  if (!Array.isArray(allCandidates) || allCandidates.length === 0) {
     result.shadow_deltas = null;
     return result;
   }
+
+  // Cache stores up to 20 candidates; slice to requested limit
+  const candidates = allCandidates.slice(0, maxClusters);
 
   result.clusters_found = candidates.length;
 
@@ -282,7 +289,7 @@ export async function dreamSynthesis(brainId: string, maxClusters = DEFAULT_MAX_
           source_event_id: sourceEventId,
           metadata: {
             type: "synthesis",
-            theme: candidate.dominant_theme ?? "personal",
+            theme: candidate.dominant_theme ?? "ml-research",
             quality: Math.round(avgQuality * 100) / 100,
             evidence_ids: candidate.member_ids,
             coverage_score: Math.round(evaluation.coverage * 100) / 100,

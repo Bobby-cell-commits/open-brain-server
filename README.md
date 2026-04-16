@@ -1,10 +1,8 @@
 # Open Brain
 
-**Your personal knowledge infrastructure. Capture thoughts from anywhere, search by meaning.**
+**Graph-structured MCP memory. [37.2% on LongMemEval baseline](BENCHMARK.md) — a benchmark most memory systems don't publish.**
 
-Open Brain stores your thoughts with AI-generated embeddings so any AI assistant can search your memory by meaning -- not keywords. Thoughts flow in from Telegram, automated pipelines, or any MCP-compatible AI client (Claude, ChatGPT, and others) and are instantly searchable. A knowledge graph auto-links related thoughts, extracts entities, and tracks co-occurrence patterns. Automated maintenance keeps the graph healthy -- deduplicating near-duplicates, tracking theme evolution, synthesizing insights, and archiving stale content.
-
-Everything lives in your own database, so you own your data.
+A self-hostable memory server for MCP clients (Claude, ChatGPT, any assistant that speaks MCP). Thoughts flow in from Telegram, pipelines, or direct capture, and land in a Newman-IDF weighted entity graph — not a flat document store. An automated Dream cycle runs in the background: deduplicating near-duplicates, tracking theme drift, synthesizing insights across clusters, and archiving stale content. 17 MCP tools. PostgreSQL + pgvector. You own your data.
 
 ## How It Works
 
@@ -279,34 +277,6 @@ Open Brain runs background maintenance to keep the knowledge graph healthy. Thes
 
 GitHub Actions workflow files are included in `docs/workflows/` as reference for customizing schedules.
 
-## Benchmark
-
-Open Brain includes a [LongMemEval](https://arxiv.org/abs/2407.15168) benchmark harness that measures retrieval quality across 500 questions in 6 categories. Each question gets its own isolated brain -- conversations are ingested as thoughts, then questions test whether the right memories can be retrieved and answered.
-
-**Baseline results (threshold=0.4, limit=20, graph expansion on):**
-
-| Category | Score | What it tests |
-|----------|-------|---------------|
-| single-session-assistant | 69.6% | Recall assistant responses from a single conversation |
-| single-session-user | 55.7% | Recall user statements from a single conversation |
-| knowledge-update | 52.6% | Surface the latest version of updated information |
-| temporal-reasoning | 30.8% | Answer questions about when things happened |
-| multi-session | 18.8% | Synthesize across multiple conversations |
-| single-session-preference | 3.3% | Recall casually mentioned preferences |
-| **Overall** | **37.2%** | |
-
-Vector search handles direct factual recall well. Multi-session synthesis and temporal reasoning are the main areas for improvement -- they require retrieval strategies beyond single-query vector similarity.
-
-Run the benchmark against your own instance:
-
-```bash
-pip install -r benchmark/requirements.txt
-cp benchmark/.env.example benchmark/.env  # fill in keys
-python -m benchmark longmemeval run --concurrency 5
-```
-
-Results land in `benchmark/results/`. See `benchmark/longmemeval/config.py` for tunable parameters (threshold, retrieval limit, models).
-
 ## Project Structure
 
 ```
@@ -316,15 +286,11 @@ open-brain-server/
     functions/
       _shared/                    # Shared modules (supabase-client, openrouter, types, errors, auto-link, entities, dream-*)
       telegram-bot/               # Telegram capture (primary capture path)
-      open-brain-mcp/             # MCP server (16 tools)
+      open-brain-mcp/             # MCP server (17 tools)
         tools/                    # Individual tool implementations
       run-pipeline/               # Automated RSS/HF Papers/Emergent Mind ingestion
       monitor-pipeline/           # Pipeline health monitoring with Telegram alerts
       refresh-graph-analysis/     # Graph analysis cache computation
-  benchmark/                        # LongMemEval retrieval quality benchmark
-    longmemeval/                    # Harness: retrieve → reader → judge → score
-    results/                        # Baseline results (summary markdown)
-    tests/                          # 60 tests
   docker/                         # Docker Compose self-hosting (6 services)
   pipeline/                       # Python-based local pipeline (Reddit, RSS, briefing)
   scripts/                        # Setup and deployment automation

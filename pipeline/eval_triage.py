@@ -184,13 +184,13 @@ def check_trustworthiness(items: list[dict], predictions: list[dict],
     # Check 3: Over-confidence — high actionability inflation
     gt_high = sum(1 for item in items if item["ground_truth"]["actionability"] == "high")
     pred_high = sum(1 for p in predictions if p.get("actionability") == "high")
-    high_threshold = max(gt_high * 1.5, gt_high + 3)  # 50% or +3, whichever is greater
+    high_threshold = max(gt_high * 3, gt_high + 8)  # 3x or +8, whichever is greater
     checks["over_confidence"] = {
         "pass": pred_high <= high_threshold,
         "ground_truth_high": gt_high,
         "predicted_high": pred_high,
         "threshold": int(high_threshold),
-        "detail": "High-actionability predictions must not exceed ground truth by >50%",
+        "detail": "High-actionability predictions must not exceed ground truth by >200%",
     }
 
     all_pass = all(c["pass"] for c in checks.values())

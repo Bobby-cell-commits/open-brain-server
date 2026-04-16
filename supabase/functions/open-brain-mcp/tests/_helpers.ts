@@ -23,11 +23,11 @@ await new Promise((r) => setTimeout(r, 10));
 // ---------------------------------------------------------------------------
 
 export function createMockMcp() {
-  const tools = new Map<string, (args: any) => Promise<any>>();
+  const tools = new Map<string, (args: any, ctx?: any) => Promise<any>>();
   const mcp = {
     tool(
       name: string,
-      config: { handler: (args: any) => Promise<any>; [k: string]: unknown },
+      config: { handler: (args: any, ctx?: any) => Promise<any>; [k: string]: unknown },
     ) {
       tools.set(name, config.handler);
     },

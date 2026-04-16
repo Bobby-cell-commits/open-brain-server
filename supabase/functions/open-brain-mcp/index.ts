@@ -25,6 +25,7 @@ import { registerListEntities } from "./tools/list-entities.ts";
 import { registerSerendipityDigest } from "./tools/serendipity-digest.ts";
 import { registerPipeline } from "./tools/pipeline.ts";
 import { registerReviewStale } from "./tools/review-stale.ts";
+import { registerDeepSearch } from "./tools/deep-search.ts";
 import { registerAdminRoutes } from "./admin-routes.ts";
 
 // ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ function createMcpServer(): McpServer {
     schemaAdapter: (schema) => zodToJsonSchema(schema as z.ZodType),
   });
 
-  // Register all 16 tools
+  // Register all 17 tools
   registerSearchThoughts(mcp, z);
   registerListThoughts(mcp, z);
   registerThoughtStats(mcp, z);
@@ -85,6 +86,7 @@ function createMcpServer(): McpServer {
   registerSerendipityDigest(mcp, z);
   registerPipeline(mcp, z);
   registerReviewStale(mcp, z);
+  registerDeepSearch(mcp, z);
 
   return mcp;
 }

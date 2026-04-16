@@ -4,15 +4,16 @@
 
 import { supabaseAdmin } from "../_shared/supabase-client.ts";
 import { chatCompletion, generateEmbedding } from "../_shared/openrouter.ts";
-import { errorResponse } from "../_shared/errors.ts";
-import { VALID_THEMES } from "../_shared/types.ts";
-import { checkDedup, storeConnections } from "../_shared/auto-link.ts";
+import { errorResponse, corsHeaders } from "../_shared/errors.ts";
+import { VALID_THEMES, VALID_ACTIVITIES } from "../_shared/types.ts";
+import { checkDedup, storeConnections, storeEntityBridges } from "../_shared/auto-link.ts";
 import { dreamDedup } from "../_shared/dream-dedup.ts";
 import { dreamDecay } from "../_shared/dream-decay.ts";
 import { dreamThemes } from "../_shared/dream-themes.ts";
 import { dreamSynthesis } from "../_shared/dream-synthesis.ts";
 import { resolveEntities } from "../_shared/entities.ts";
 import { insertThought } from "../_shared/insert-thought.ts";
+import { sendMessage, escapeHtml, getAllowedChatId } from "../_shared/telegram.ts";
 
 const OWNER_BRAIN_ID = Deno.env.get("OWNER_BRAIN_ID") ?? "00000000-0000-4000-a000-000000000001";
 
@@ -36,6 +37,9 @@ const HF_DAILY_PAPERS_URL = "https://huggingface.co/api/daily_papers";
 const HF_SCREEN_TITLE_TERMS = [
   "language model", "llm", "agent", "reasoning", "embedding",
   "retriev", "code model", "code foundation", "benchmark", "efficient", "hallucin",
+  // 2026-04-09: widened to capture architecture, optimization, and evaluation papers
+  "transformer", "attention", "pruning", "knowledge", "reward",
+  "autoregressive", "test-time", "alignment", "code repair", "program repair",
 ];
 
 const HF_KEYWORD_ALLOWLIST = new Set([
@@ -48,6 +52,11 @@ const HF_KEYWORD_ALLOWLIST = new Set([
   "multilingual embedding models",
   "reinforcement learning from human feedback",
   "multimodal large language models", "language models",
+  // 2026-04-09: expanded to catch papers via ai_keywords when title terms miss
+  "reinforcement learning", "instruction tuning", "in-context learning",
+  "knowledge graph", "knowledge graphs", "semantic search",
+  "question answering", "information extraction", "named entity recognition",
+  "chain-of-thought", "prompt engineering", "vision-language models",
 ]);
 
 const HF_UPVOTE_CATCH_ALL = 40;
@@ -135,24 +144,73 @@ Return JSON with ALL of the following fields:
   1. About AI-powered coding tools, code completion, or code generation?
      → YES: "ai-coding-tools" → STOP
      → NO: continue to 2
-  2. About ML research, models, training, or academic papers?
+  2. About ML research, models, training, benchmarks, or academic papers?
      → YES: "ml-research" → STOP
      → NO: continue to 3
-  3. About knowledge management, memory systems, RAG, or search?
+  3. About knowledge management, memory systems, RAG, search, or PKM tools?
      → YES: "knowledge-systems" → STOP
      → NO: continue to 4
-  4. About infrastructure, deployment, databases, or DevOps?
-     → YES: "infrastructure" → STOP
+  4. About chip architecture, embedded systems, FPGA, semiconductors, or electronics?
+     → YES: "hardware-systems" → STOP
      → NO: continue to 5
-  5. About developer workflows, tooling, or productivity?
-     → YES: "developer-experience" → STOP
+  5. About infrastructure, deployment, databases, DevOps, cloud, or systems programming?
+     → YES: "infrastructure" → STOP
      → NO: continue to 6
-  6. About a personal side project or building something?
-     → YES: "side-projects" → STOP
+  6. About developer workflows, tooling, or the craft of software engineering?
+     → YES: "developer-experience" → STOP
      → NO: continue to 7
-  7. About industry trends, company news, or market dynamics?
-     → YES: "industry-trends" → STOP
-     → NO: "personal"
+  7. About vulnerability research, cryptography, privacy, or security threats?
+     → YES: "security" → STOP
+     → NO: continue to 8
+  8. About bioinformatics, scientific workflows, statistical computing, or Julia/R ecosystem?
+     → YES: "scientific-computing" → STOP
+     → NO: continue to 9
+  9. About AI regulation, privacy law, tech policy, or compliance?
+     → YES: "regulation-policy" → STOP
+     → NO: continue to 10
+  10. About structural tech analysis, compute economics, business models, or market sizing?
+      → YES: "tech-economics" → STOP
+      → NO: continue to 11
+  11. About industry news, company announcements, product launches, or ecosystem shifts?
+      → YES: "industry-trends" → STOP
+      → NO: Pick the closest theme from steps 1-11.
+
+  Theme anti-patterns — common mistakes to avoid:
+  - Newsletter roundups about AI companies or model releases → "industry-trends", NOT "career-personal"
+  - Academic paper summaries from arXiv or HuggingFace → "ml-research", NOT "opinion"
+  - Career advice, interview tips, workplace culture → theme "developer-experience", activity "career-personal"
+  - Self-hosting or monitoring tool questions → "infrastructure", NOT "career-personal"
+  - Humor/memes about a technology topic → use that topic's theme, NOT "career-personal"
+  - Someone built a RAG pipeline as a weekend project → theme "knowledge-systems", activity "project-showcase"
+  - EU AI Act analysis → "regulation-policy", NOT "industry-trends"
+  - SemiAnalysis chip breakdown → "hardware-systems", NOT "infrastructure"
+  - Benedict Evans annual letter → "tech-economics", NOT "industry-trends"
+
+- "activity": classify using this procedure:
+  1. Is this an academic paper, preprint, or formal study?
+     → YES: "research-paper" → STOP
+     → NO: continue to 2
+  2. Is this a discussion thread, debate, Q&A, or community conversation?
+     → YES: "community-discussion" → STOP
+     → NO: continue to 3
+  3. Is this someone demonstrating or releasing a project they built?
+     → YES: "project-showcase" → STOP
+     → NO: continue to 4
+  4. Is this a product launch, release note, pricing change, or company news?
+     → YES: "announcement" → STOP
+     → NO: continue to 5
+  5. Is this a periodic survey, benchmark report, or data-driven industry analysis?
+     → YES: "industry-report" → STOP
+     → NO: continue to 6
+  6. Is this a how-to, guide, walkthrough, or educational content?
+     → YES: "tutorial" → STOP
+     → NO: continue to 7
+  7. Is this career advice, job search, work-life balance, or non-technical reflection?
+     → YES: "career-personal" → STOP
+     → NO: continue to 8
+  8. Is this an opinion piece, hot take, commentary, or editorial?
+     → YES: "opinion" → STOP
+     → NO: "opinion"
 
 - "topics": array of 2-3 specific tags (GOOD: "pgvector-hnsw", "rag-evaluation" / BAD: "ai", "tools", "research")
 - "entities": array of {"name", "type": "person"|"project"|"tool"|"organization", "role": "mention"|"author"|"about"} — specific named entities only
@@ -249,7 +307,8 @@ interface CombinedResult {
 const METADATA_FALLBACK: Record<string, unknown> = {
   type: "observation",
   relevance: "",
-  theme: "personal",
+  theme: "ml-research",
+  activity: "opinion",
   topics: [],
   entities: [],
   quality: 0.5,
@@ -266,14 +325,23 @@ const METADATA_FALLBACK: Record<string, unknown> = {
 async function combinedTriageAndExtract(content: string, imageUrl?: string): Promise<CombinedResult> {
   try {
     const result = await chatCompletion(PIPELINE_COMBINED_PROMPT, content.slice(0, 4000), undefined, imageUrl);
-    const parsed = JSON.parse(result);
+    const raw = JSON.parse(result);
+
+    // Handle both flat and nested response formats. gpt-4o-mini sometimes nests
+    // fields under "TRIAGE"/"METADATA" keys (interpreting prompt section headers
+    // as JSON structure) instead of returning flat top-level fields.
+    const triageFields = raw.TRIAGE ?? raw.triage ?? raw;
+    const metaFields = raw.METADATA ?? raw.metadata ?? raw;
+    // Merge so validateTriageResult sees triage keys at top level
+    const parsed = { ...triageFields, ...metaFields };
 
     const triage = validateTriageResult(parsed, content.slice(0, 200));
 
     const metadata: Record<string, unknown> = {
       type: typeof parsed.type === "string" ? parsed.type : METADATA_FALLBACK.type,
       relevance: typeof parsed.relevance === "string" ? parsed.relevance : METADATA_FALLBACK.relevance,
-      theme: typeof parsed.theme === "string" && (VALID_THEMES as readonly string[]).includes(parsed.theme) ? parsed.theme : "personal",
+      theme: typeof parsed.theme === "string" && (VALID_THEMES as readonly string[]).includes(parsed.theme) ? parsed.theme : "ml-research",
+      activity: typeof parsed.activity === "string" && (VALID_ACTIVITIES as readonly string[]).includes(parsed.activity) ? parsed.activity : "opinion",
       topics: Array.isArray(parsed.topics) ? parsed.topics : triage.key_topics,
       entities: Array.isArray(parsed.entities) ? parsed.entities : [],
       quality: typeof parsed.quality === "number" ? parsed.quality : 0.5,
@@ -283,7 +351,9 @@ async function combinedTriageAndExtract(content: string, imageUrl?: string): Pro
     };
 
     return { triage, metadata };
-  } catch {
+  } catch (e) {
+    const errMsg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    console.error(`combinedTriageAndExtract FAILED: ${errMsg} | content: ${content.slice(0, 100)}`);
     return {
       triage: { ...TRIAGE_FALLBACK, summary: content.slice(0, 200) },
       metadata: { ...METADATA_FALLBACK },
@@ -345,24 +415,73 @@ Return JSON with:
   1. About AI-powered coding tools, code completion, or code generation?
      → YES: "ai-coding-tools" → STOP
      → NO: continue to 2
-  2. About ML research, models, training, or academic papers?
+  2. About ML research, models, training, benchmarks, or academic papers?
      → YES: "ml-research" → STOP
      → NO: continue to 3
-  3. About knowledge management, memory systems, RAG, or search?
+  3. About knowledge management, memory systems, RAG, search, or PKM tools?
      → YES: "knowledge-systems" → STOP
      → NO: continue to 4
-  4. About infrastructure, deployment, databases, or DevOps?
-     → YES: "infrastructure" → STOP
+  4. About chip architecture, embedded systems, FPGA, semiconductors, or electronics?
+     → YES: "hardware-systems" → STOP
      → NO: continue to 5
-  5. About developer workflows, tooling, or productivity?
-     → YES: "developer-experience" → STOP
+  5. About infrastructure, deployment, databases, DevOps, cloud, or systems programming?
+     → YES: "infrastructure" → STOP
      → NO: continue to 6
-  6. About a personal side project or building something?
-     → YES: "side-projects" → STOP
+  6. About developer workflows, tooling, or the craft of software engineering?
+     → YES: "developer-experience" → STOP
      → NO: continue to 7
-  7. About industry trends, company news, or market dynamics?
-     → YES: "industry-trends" → STOP
-     → NO: "personal"
+  7. About vulnerability research, cryptography, privacy, or security threats?
+     → YES: "security" → STOP
+     → NO: continue to 8
+  8. About bioinformatics, scientific workflows, statistical computing, or Julia/R ecosystem?
+     → YES: "scientific-computing" → STOP
+     → NO: continue to 9
+  9. About AI regulation, privacy law, tech policy, or compliance?
+     → YES: "regulation-policy" → STOP
+     → NO: continue to 10
+  10. About structural tech analysis, compute economics, business models, or market sizing?
+      → YES: "tech-economics" → STOP
+      → NO: continue to 11
+  11. About industry news, company announcements, product launches, or ecosystem shifts?
+      → YES: "industry-trends" → STOP
+      → NO: Pick the closest theme from steps 1-11.
+
+  Theme anti-patterns — common mistakes to avoid:
+  - Newsletter roundups about AI companies or model releases → "industry-trends", NOT "career-personal"
+  - Academic paper summaries from arXiv or HuggingFace → "ml-research", NOT "opinion"
+  - Career advice, interview tips, workplace culture → theme "developer-experience", activity "career-personal"
+  - Self-hosting or monitoring tool questions → "infrastructure", NOT "career-personal"
+  - Humor/memes about a technology topic → use that topic's theme, NOT "career-personal"
+  - Someone built a RAG pipeline as a weekend project → theme "knowledge-systems", activity "project-showcase"
+  - EU AI Act analysis → "regulation-policy", NOT "industry-trends"
+  - SemiAnalysis chip breakdown → "hardware-systems", NOT "infrastructure"
+  - Benedict Evans annual letter → "tech-economics", NOT "industry-trends"
+
+- "activity": classify using this procedure:
+  1. Is this an academic paper, preprint, or formal study?
+     → YES: "research-paper" → STOP
+     → NO: continue to 2
+  2. Is this a discussion thread, debate, Q&A, or community conversation?
+     → YES: "community-discussion" → STOP
+     → NO: continue to 3
+  3. Is this someone demonstrating or releasing a project they built?
+     → YES: "project-showcase" → STOP
+     → NO: continue to 4
+  4. Is this a product launch, release note, pricing change, or company news?
+     → YES: "announcement" → STOP
+     → NO: continue to 5
+  5. Is this a periodic survey, benchmark report, or data-driven industry analysis?
+     → YES: "industry-report" → STOP
+     → NO: continue to 6
+  6. Is this a how-to, guide, walkthrough, or educational content?
+     → YES: "tutorial" → STOP
+     → NO: continue to 7
+  7. Is this career advice, job search, work-life balance, or non-technical reflection?
+     → YES: "career-personal" → STOP
+     → NO: continue to 8
+  8. Is this an opinion piece, hot take, commentary, or editorial?
+     → YES: "opinion" → STOP
+     → NO: "opinion"
 
 - "topics": array of 2-3 specific topic tags, lowercase hyphenated.
   Tags should be specific enough that searching for one returns a focused set, not half the database.
@@ -440,6 +559,11 @@ async function captureThought(
   // Resolve entities (post-insert, best-effort)
   if (metadata.entities && Array.isArray(metadata.entities)) {
     await resolveEntities(OWNER_BRAIN_ID, metadata.entities, result.id);
+  }
+
+  // Store entity bridges (post-insert, best-effort)
+  if (metadata.entities && Array.isArray(metadata.entities)) {
+    await storeEntityBridges(OWNER_BRAIN_ID, result.id);
   }
 
   return result.id;
@@ -557,8 +681,8 @@ async function processRssFeeds(): Promise<{ captured: number; skipped: number; f
             embedding,
             metadata: combined.metadata,
           });
+          await markProcessed(entryId, result !== "duplicate" ? "rss" : "rss-dedup", feedUrl);
           if (result !== "duplicate") {
-            await markProcessed(entryId, "rss", feedUrl);
             stats.captured++;
           } else {
             stats.skipped++;
@@ -625,8 +749,8 @@ async function processHfPapers(): Promise<{ captured: number; skipped: number; f
       if (combined.triage.actionability === "high" || combined.triage.actionability === "medium" || hasHighUpvotes) {
         const enriched = formatHfPaperContent(paper, combined.triage);
         const result = await captureThought(enriched, "hf_papers", eventId, { embedding, metadata: combined.metadata });
+        await markProcessed(eventId, result !== "duplicate" ? "hf_papers" : "hf_papers-dedup", "hf_papers");
         if (result !== "duplicate") {
-          await markProcessed(eventId, "hf_papers", "hf_papers");
           stats.captured++;
         } else {
           stats.skipped++;
@@ -723,8 +847,8 @@ async function processEmergentMind(): Promise<{ captured: number; skipped: numbe
         // Store temperature in metadata for downstream salience use
         const metadata = { ...combined.metadata, temperature };
         const result = await captureThought(enriched, "emergent_mind", eventId, { embedding, metadata });
+        await markProcessed(eventId, result !== "duplicate" ? "emergent_mind" : "emergent_mind-dedup", "emergent_mind");
         if (result !== "duplicate") {
-          await markProcessed(eventId, "emergent_mind", "emergent_mind");
           stats.captured++;
         } else {
           stats.skipped++;
@@ -798,14 +922,28 @@ function stripHtml(html: string): string {
 // --- Main handler ---
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") {
     return errorResponse("Method not allowed", 405);
   }
 
-  // Auth: require MCP_ACCESS_KEY
-  const key = req.headers.get("x-brain-key");
-  if (key !== Deno.env.get("MCP_ACCESS_KEY")) {
-    return errorResponse("Unauthorized", 401);
+  // Auth: x-brain-key (MCP/cron callers) or service_role JWT (dashboard/supabase-js)
+  const brainKey = req.headers.get("x-brain-key");
+  if (brainKey !== Deno.env.get("MCP_ACCESS_KEY")) {
+    const apiKey = req.headers.get("apikey") || "";
+    const authHeader = req.headers.get("authorization") || "";
+    const token = apiKey || authHeader.replace(/^Bearer\s+/i, "");
+    let isServiceRole = false;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      isServiceRole = payload.role === "service_role";
+    } catch { /* not a valid JWT */ }
+    if (!isServiceRole) {
+      return errorResponse("Unauthorized", 401);
+    }
   }
 
   const runStartTime = Date.now();
@@ -818,6 +956,7 @@ Deno.serve(async (req) => {
   let runCoOccurrenceDecay = false;
   let runDreamThemes = false;
   let runDreamSynthesis = false;
+  let runSerendipity = false;
   try {
     const body = await req.json();
     if (body.source && typeof body.source === "string") {
@@ -840,6 +979,9 @@ Deno.serve(async (req) => {
     }
     if (body.dream_synthesis === true) {
       runDreamSynthesis = true;
+    }
+    if (body.serendipity === true) {
+      runSerendipity = true;
     }
   } catch {
     // Empty body or invalid JSON — default to "all"
@@ -893,7 +1035,7 @@ Deno.serve(async (req) => {
   // Refresh salience scores after pipeline captures
   let salienceRefreshed = 0;
   try {
-    const { data } = await supabaseAdmin.rpc("refresh_salience");
+    const { data } = await supabaseAdmin.rpc("refresh_salience", { p_brain_id: OWNER_BRAIN_ID });
     salienceRefreshed = data ?? 0;
   } catch (e) {
     console.error(`Salience refresh failed: ${e}`);
@@ -969,6 +1111,89 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Serendipity digest → Telegram (opt-in via serendipity:true)
+  interface DigestRow {
+    slot: string;
+    id: string;
+    content: string;
+    source: string;
+    theme: string | null;
+    quality: number | null;
+    created_at: string;
+    reason: string;
+  }
+
+  let serendipityResult: { slots_sent: number } | null = null;
+  if (runSerendipity) {
+    try {
+      const { data, error } = await supabaseAdmin.rpc("serendipity_digest", {
+        p_brain_id: OWNER_BRAIN_ID,
+      });
+      if (error) throw error;
+
+      const rows = (data as DigestRow[]) ?? [];
+      if (rows.length > 0) {
+        const slotConfig: Record<string, { emoji: string; label: string; prompt: string }> = {
+          rediscovery: {
+            emoji: "💎",
+            label: "Forgotten gem",
+            prompt: "Still relevant? Has your thinking evolved since this was captured?",
+          },
+          orphan: {
+            emoji: "🏝️",
+            label: "Isolated thought",
+            prompt: "This has zero connections. Does it relate to anything you're working on now?",
+          },
+          underrepresented: {
+            emoji: "🔍",
+            label: "Neglected theme",
+            prompt: "This theme has the fewest thoughts. Blind spot or intentional deprioritization?",
+          },
+          echo: {
+            emoji: "🔄",
+            label: "Pattern signal",
+            prompt: "This older thought echoes something you captured recently. Convergence worth exploring?",
+          },
+        };
+
+        const fallbackConfig = { emoji: "✨", label: "Resurface", prompt: "" };
+
+        const sections = rows.map((r) => {
+          const cfg = slotConfig[r.slot] ?? fallbackConfig;
+          const age = Math.floor(
+            (Date.now() - new Date(r.created_at).getTime()) / (1000 * 60 * 60 * 24),
+          );
+          const truncated = r.content.length > 300
+            ? r.content.slice(0, 300) + "…"
+            : r.content;
+          const meta = [
+            r.theme ? `<code>${escapeHtml(r.theme)}</code>` : null,
+            r.source,
+            `${age}d ago`,
+            r.quality != null ? `q:${r.quality.toFixed(1)}` : null,
+          ].filter(Boolean).join(" · ");
+
+          return [
+            `${cfg.emoji} <b>${escapeHtml(cfg.label)}</b>`,
+            `${escapeHtml(truncated)}`,
+            meta,
+            `<i>${cfg.prompt}</i>`,
+          ].join("\n");
+        });
+
+        const message = `🔮 <b>Serendipity Digest</b>\n\n${sections.join("\n\n──────────\n\n")}`;
+        await sendMessage(getAllowedChatId(), message);
+        serendipityResult = { slots_sent: rows.length };
+        console.log(`Serendipity: sent ${rows.length} slot(s) to Telegram`);
+      } else {
+        serendipityResult = { slots_sent: 0 };
+        console.log("Serendipity: no thoughts available, skipping Telegram");
+      }
+    } catch (e) {
+      console.error(`Serendipity digest failed: ${e}`);
+    }
+  }
+
   // --- Pipeline run logging ---
   const executionMs = Date.now() - runStartTime;
   const hasErrors = Object.keys(sources).some((k) => k.endsWith("_error"));
@@ -1024,8 +1249,9 @@ Deno.serve(async (req) => {
       co_occurrence_decay: coOccurrenceDecayResult,
       dream_themes: dreamThemesResult,
       dream_synthesis: dreamSynthesisResult,
+      serendipity: serendipityResult,
       timestamp: new Date().toISOString(),
     }),
-    { headers: { "Content-Type": "application/json" } },
+    { headers: { "Content-Type": "application/json", ...corsHeaders } },
   );
 });

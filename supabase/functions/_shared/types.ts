@@ -2,6 +2,7 @@ export const EMBEDDING_DIMENSIONS = 1536;
 
 export const CO_OCCURRENCE_WEIGHTS: Record<string, number> = {
   search_thoughts: 1.0,
+  deep_search: 1.0,
   list_thoughts: 0.5,
   get_connections: 0.0,
   weekly_review: 0.0,
@@ -18,6 +19,7 @@ export interface ThoughtMetadata {
   topics: string[];
   type: string;
   theme?: string;
+  activity?: string;
   relevance?: string;
   action_items: ActionItem[];
   dates_mentioned: string[];
@@ -91,17 +93,25 @@ export interface EntityResult {
 }
 
 export const VALID_THEMES = [
-  "ml-research", "developer-experience", "side-projects", "ai-coding-tools",
-  "industry-trends", "personal", "knowledge-systems", "infrastructure",
+  "ml-research", "developer-experience", "ai-coding-tools", "knowledge-systems",
+  "infrastructure", "industry-trends", "hardware-systems", "tech-economics",
+  "security", "scientific-computing", "regulation-policy",
+] as const;
+
+export const VALID_ACTIVITIES = [
+  "research-paper", "community-discussion", "project-showcase", "announcement",
+  "industry-report", "opinion", "career-personal", "tutorial",
 ] as const;
 
 /** Validate and fill missing fields on LLM-extracted metadata. */
 export function validateMetadata(raw: Record<string, unknown>): ThoughtMetadata {
   const rawTheme = typeof raw.theme === "string" ? raw.theme : "";
+  const rawActivity = typeof raw.activity === "string" ? raw.activity : "";
   return {
     type: typeof raw.type === "string" ? raw.type : "observation",
     relevance: typeof raw.relevance === "string" ? raw.relevance : "",
-    theme: (VALID_THEMES as readonly string[]).includes(rawTheme) ? rawTheme : "personal",
+    theme: (VALID_THEMES as readonly string[]).includes(rawTheme) ? rawTheme : "ml-research",
+    activity: (VALID_ACTIVITIES as readonly string[]).includes(rawActivity) ? rawActivity : "opinion",
     topics: Array.isArray(raw.topics) ? raw.topics : [],
     entities: Array.isArray(raw.entities) ? raw.entities : [],
     quality: typeof raw.quality === "number" ? raw.quality : 0.5,

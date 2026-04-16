@@ -32,7 +32,7 @@ Deno.test("returns formatted digest with 4 slots", async () => {
   const digestData = [
     { slot: "rediscovery", id: "aaa", content: "Old gem about embeddings", source: "telegram", theme: "ml-research", quality: 0.9, created_at: "2026-01-15T10:00:00Z", reason: "High quality, not accessed in 30+ days" },
     { slot: "orphan", id: "bbb", content: "Disconnected thought about Rust", source: "mcp", theme: "ai-coding-tools", quality: 0.7, created_at: "2026-02-20T14:00:00Z", reason: "Zero connections" },
-    { slot: "underrepresented", id: "ccc", content: "Note on personal workflow", source: "telegram", theme: "personal", quality: 0.6, created_at: "2026-03-01T08:00:00Z", reason: "Theme has fewest thoughts" },
+    { slot: "underrepresented", id: "ccc", content: "Note on developer workflow", source: "telegram", theme: "developer-experience", quality: 0.6, created_at: "2026-03-01T08:00:00Z", reason: "Theme has fewest thoughts" },
     { slot: "echo", id: "ddd", content: "Related to recent AI agents capture", source: "reddit", theme: "ml-research", quality: 0.8, created_at: "2026-02-10T12:00:00Z", reason: "Echoes recent capture" },
   ];
 

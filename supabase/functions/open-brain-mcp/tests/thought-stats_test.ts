@@ -108,13 +108,13 @@ Deno.test("includes theme_tracking with velocity and lifecycle", async () => {
   const statsData = {
     total_thoughts: 100,
     by_type: { idea: 40 },
-    by_theme: { "ml-research": 50, "personal": 30 },
+    by_theme: { "ml-research": 50, "developer-experience": 30 },
     top_topics: [],
     top_people: [],
   };
   const themeStatsData = [
     { name: "ml-research", velocity: 5.2, lifecycle_state: "active", thought_count: 50 },
-    { name: "personal", velocity: 1.5, lifecycle_state: "mature", thought_count: 30 },
+    { name: "developer-experience", velocity: 1.5, lifecycle_state: "mature", thought_count: 30 },
   ];
 
   stubRpc(supabaseAdmin, (name: string) => {
@@ -127,7 +127,7 @@ Deno.test("includes theme_tracking with velocity and lifecycle", async () => {
     const parsed = JSON.parse(result.content[0].text);
     assertEquals(parsed.theme_tracking["ml-research"].velocity, 5.2);
     assertEquals(parsed.theme_tracking["ml-research"].lifecycle, "active");
-    assertEquals(parsed.theme_tracking["personal"].lifecycle, "mature");
+    assertEquals(parsed.theme_tracking["developer-experience"].lifecycle, "mature");
   } finally {
     restore(supabaseAdmin);
   }

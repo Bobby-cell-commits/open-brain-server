@@ -273,6 +273,19 @@ Two complementary strategies:
    - Active TRACKER item names/keywords
    - Actionable patterns (tasks, decisions, ideas)
 
+   **Bridge query escalation:** For bridge queries specifically (the ones
+   combining two clusters), check `low_confidence` in the response:
+   - If `low_confidence=true` AND results >= 1: re-run the same query via
+     `deep_search(query, threshold=0.5)` — multi-hop graph traversal now
+     crosses clusters via entity bridges.
+   - If `low_confidence=true` AND results = 0: decompose the bridge into
+     two single-topic `search_thoughts` queries (one per cluster) instead.
+   - If `low_confidence=false`: keep the results as-is, no escalation needed.
+
+   This adds ~2-3s per escalated query. Expect 1-2 escalations per full run
+   (bridge queries are inherently cross-cluster, so low_confidence is common).
+   Non-bridge queries (TRACKER items, actionable patterns) should NOT escalate.
+
 Parse results same as Phase 3. Update clusters.
 
 **Light pass:**

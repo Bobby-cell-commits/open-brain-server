@@ -34,7 +34,7 @@ export async function insertThought(
     if (error.code === "23505") {
       return { id: "duplicate", created_at: new Date().toISOString() };
     }
-    throw error;
+    throw new Error(`DB insert failed (${error.code}): ${error.message}`);
   }
 
   return data as InsertThoughtResult;

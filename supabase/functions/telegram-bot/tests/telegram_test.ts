@@ -49,7 +49,7 @@ Deno.test("setReaction calls setMessageReaction endpoint", async () => {
   }
 });
 
-Deno.test("formatConfirmation includes type and topics", () => {
+Deno.test("formatConfirmation includes type, theme, activity, and topics", () => {
   const metadata: ThoughtMetadata = {
     type: "idea",
     topics: ["graph-search", "pgvector"],
@@ -57,11 +57,14 @@ Deno.test("formatConfirmation includes type and topics", () => {
     action_items: [],
     dates_mentioned: [],
     theme: "knowledge-systems",
+    activity: "project-showcase",
     relevance: "Graph traversal for better retrieval",
     quality: 0.8,
   };
   const result = formatConfirmation(metadata);
   assertStringIncludes(result, "idea");
+  assertStringIncludes(result, "knowledge-systems");
+  assertStringIncludes(result, "project-showcase");
   assertStringIncludes(result, "graph-search");
   assertStringIncludes(result, "pgvector");
 });

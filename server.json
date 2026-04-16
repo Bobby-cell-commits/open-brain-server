@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Bobby-cell-commits/open-brain",
   "title": "Open Brain",
-  "description": "Personal knowledge graph with 16 MCP tools. Auto-links, deduplicates, tracks themes, synthesizes.",
+  "description": "Graph-structured MCP memory server. 37.2% LongMemEval baseline, automated dedup/theme/synthesis/decay cycle. Self-hostable.",
   "version": "1.0.0",
   "repository": {
     "url": "https://github.com/Bobby-cell-commits/open-brain-server",

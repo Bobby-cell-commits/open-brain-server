@@ -17,7 +17,7 @@ jobs:
           failed=0
           failed_types=""
 
-          for type in density hubs source_pairs dedup_candidates dedup_zones; do
+          for type in density hubs source_pairs dedup_candidates dedup_zones synthesis_candidates; do
             echo "--- Refreshing: $type ---"
 
             ok=false

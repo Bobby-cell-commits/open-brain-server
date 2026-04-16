@@ -114,14 +114,10 @@ Deno.test("synthesizes a passing cluster and inserts thought + connections", asy
   let insertedThought: any = null;
   let insertedConnections: any[] = [];
 
-  stubRpc(supabaseAdmin, (name) => {
-    if (name === "find_synthesis_candidates") {
-      return mockChain({ data: [candidate], error: null });
-    }
-    return mockChain({ data: null, error: null });
-  });
-
   stubFrom(supabaseAdmin, (table: string) => {
+    if (table === "graph_analysis_cache") {
+      return mockChain({ data: { result: [candidate] }, error: null });
+    }
     if (table === "thoughts") {
       return {
         select: () => mockChain({
@@ -201,14 +197,10 @@ Deno.test("skips cluster when probe QA coverage is below 0.70", async () => {
 
   let insertCalled = false;
 
-  stubRpc(supabaseAdmin, (name) => {
-    if (name === "find_synthesis_candidates") {
-      return mockChain({ data: [candidate], error: null });
-    }
-    return mockChain({ data: null, error: null });
-  });
-
   stubFrom(supabaseAdmin, (table: string) => {
+    if (table === "graph_analysis_cache") {
+      return mockChain({ data: { result: [candidate] }, error: null });
+    }
     if (table === "thoughts") {
       return {
         select: () => mockChain({
@@ -269,14 +261,10 @@ Deno.test("insert returning null data skips cluster without crash", async () => 
 
   let connectionInsertCalled = false;
 
-  stubRpc(supabaseAdmin, (name) => {
-    if (name === "find_synthesis_candidates") {
-      return mockChain({ data: [candidate], error: null });
-    }
-    return mockChain({ data: null, error: null });
-  });
-
   stubFrom(supabaseAdmin, (table: string) => {
+    if (table === "graph_analysis_cache") {
+      return mockChain({ data: { result: [candidate] }, error: null });
+    }
     if (table === "thoughts") {
       return {
         select: () => mockChain({
@@ -321,14 +309,10 @@ Deno.test("LLM failure on synthesis skips cluster gracefully", async () => {
     return Promise.resolve(new Response("Internal Server Error", { status: 500 }));
   };
 
-  stubRpc(supabaseAdmin, (name) => {
-    if (name === "find_synthesis_candidates") {
-      return mockChain({ data: [candidate], error: null });
-    }
-    return mockChain({ data: null, error: null });
-  });
-
   stubFrom(supabaseAdmin, (table: string) => {
+    if (table === "graph_analysis_cache") {
+      return mockChain({ data: { result: [candidate] }, error: null });
+    }
     if (table === "thoughts") {
       return {
         select: () => mockChain({

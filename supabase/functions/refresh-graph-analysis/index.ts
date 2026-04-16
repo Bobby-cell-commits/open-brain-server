@@ -2,14 +2,17 @@
 // connection (bypasses PostgREST timeout) and caches results.
 //
 // POST /refresh-graph-analysis
-//   Body: { "type": "all" | "density" | "hubs" | "source_pairs" | "dedup_candidates" | "dedup_zones" }
+//   Body: { "type": "all" | "density" | "hubs" | "source_pairs" | "dedup_candidates" | "dedup_zones" | "synthesis_candidates" | "entity_bridges" }
 //   Auth: x-brain-key header
 //
 // Called by: GitHub Actions daily at 05:30 UTC, or manually.
 
 import { supabaseAdmin } from "../_shared/supabase-client.ts";
-import { errorResponse } from "../_shared/errors.ts";
+import { errorResponse, corsHeaders } from "../_shared/errors.ts";
 import postgres from "npm:postgres@3";
+
+const OWNER_BRAIN_ID = Deno.env.get("OWNER_BRAIN_ID") ??
+  "00000000-0000-4000-a000-000000000001";
 
 const ANALYSIS_TYPES = [
   "density",
@@ -17,6 +20,8 @@ const ANALYSIS_TYPES = [
   "source_pairs",
   "dedup_candidates",
   "dedup_zones",
+  "synthesis_candidates",
+  "entity_bridges",
 ] as const;
 
 type AnalysisType = typeof ANALYSIS_TYPES[number];
@@ -45,6 +50,10 @@ async function runAnalysis(
       return await sql`SELECT * FROM analysis_dedup_candidates(${brainId}::uuid)`;
     case "dedup_zones":
       return await sql`SELECT * FROM analysis_dedup_zones(${brainId}::uuid)`;
+    case "synthesis_candidates":
+      return await sql`SELECT * FROM find_synthesis_candidates(${brainId}::uuid, 3, 12, 0.75, 20)`;
+    case "entity_bridges":
+      return await sql`SELECT * FROM refresh_entity_bridges(${brainId}::uuid)`;
   }
 }
 
@@ -70,13 +79,29 @@ async function upsertCache(
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") {
     return errorResponse("Method not allowed", 405);
   }
 
-  const key = req.headers.get("x-brain-key");
-  if (key !== Deno.env.get("MCP_ACCESS_KEY")) {
-    return errorResponse("Unauthorized", 401);
+  // Auth: x-brain-key (MCP/cron callers) or service_role JWT (dashboard/supabase-js)
+  const brainKey = req.headers.get("x-brain-key");
+  if (brainKey !== Deno.env.get("MCP_ACCESS_KEY")) {
+    // Check for service_role JWT in apikey or Authorization header
+    const apiKey = req.headers.get("apikey") || "";
+    const authHeader = req.headers.get("authorization") || "";
+    const token = apiKey || authHeader.replace(/^Bearer\s+/i, "");
+    let isServiceRole = false;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      isServiceRole = payload.role === "service_role";
+    } catch { /* not a valid JWT */ }
+    if (!isServiceRole) {
+      return errorResponse("Unauthorized", 401);
+    }
   }
 
   // Parse requested type (default: all)
@@ -109,35 +134,30 @@ Deno.serve(async (req) => {
   const sql = postgres(dbUrl, { prepare: false });
 
   try {
-    // Get all brain IDs
-    const brains = await sql`SELECT id FROM brains`;
+    // Only refresh the owner brain — benchmark/test brains don't need cached analysis
+    const brainId = OWNER_BRAIN_ID;
+    const brainResults: AnalysisResult[] = [];
 
-    const allResults: Array<{ brain_id: string; results: AnalysisResult[] }> = [];
-
-    for (const brain of brains) {
-      const brainResults: AnalysisResult[] = [];
-
-      // Run analyses sequentially to avoid overloading DB
-      for (const type of typesToRun) {
-        const start = Date.now();
-        try {
-          const data = await runAnalysis(sql, brain.id, type);
-          const durationMs = Date.now() - start;
-          await upsertCache(brain.id, type, data, durationMs);
-          brainResults.push({ type, status: "success", duration_ms: durationMs });
-        } catch (err) {
-          const durationMs = Date.now() - start;
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`[${brain.id}] ${type} failed (${durationMs}ms): ${message}`);
-          brainResults.push({ type, status: "error", duration_ms: durationMs, error: message });
-        }
+    // Run analyses sequentially to avoid overloading DB
+    for (const type of typesToRun) {
+      const start = Date.now();
+      try {
+        const data = await runAnalysis(sql, brainId, type);
+        const durationMs = Date.now() - start;
+        await upsertCache(brainId, type, data, durationMs);
+        brainResults.push({ type, status: "success", duration_ms: durationMs });
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[${brainId}] ${type} failed (${durationMs}ms): ${message}`);
+        brainResults.push({ type, status: "error", duration_ms: durationMs, error: message });
       }
-
-      allResults.push({ brain_id: brain.id, results: brainResults });
     }
 
+    const allResults = [{ brain_id: brainId, results: brainResults }];
+
     return new Response(JSON.stringify({ results: allResults }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } finally {
     await sql.end();

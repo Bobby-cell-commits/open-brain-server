@@ -203,3 +203,80 @@ Deno.test("capture_thought: missing brain context returns error", async () => {
   assertEquals(result.isError, true);
   assertStringIncludes(result.content[0].text, "missing brain context");
 });
+
+Deno.test("capture_thought: calls storeEntityBridges when entities are extracted", async () => {
+  const { mcp, tools } = createMockMcp();
+  registerCaptureThought(mcp as any, z);
+  const handler = tools.get("capture_thought")!;
+
+  // Stub fetch to return metadata WITH entities
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (url: string | URL | Request) => {
+    const urlStr = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+    if (urlStr.includes("openrouter")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: [{ embedding: [0.1, 0.2, 0.3] }],
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    people: [],
+                    topics: ["pgvector"],
+                    type: "idea",
+                    theme: "ml-research",
+                    relevance: "test",
+                    action_items: [],
+                    dates_mentioned: [],
+                    quality: 0.8,
+                    entities: [
+                      { name: "pgvector", type: "tool", role: "about" },
+                    ],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  };
+
+  const rpcCalls: string[] = [];
+  stubRpc(supabaseAdmin, (name: string) => {
+    rpcCalls.push(name);
+    if (name === "match_thoughts") return mockChain({ data: [], error: null });
+    if (name === "resolve_entities") return mockChain({ data: null, error: null });
+    if (name === "get_thought_entity_ids") return mockChain({ data: [], error: null });
+    return mockChain({ data: null, error: null });
+  });
+
+  stubFrom(supabaseAdmin, (table: string) => {
+    if (table === "thoughts") {
+      return mockChain({
+        data: { id: "new-thought-id", created_at: "2026-04-14T10:00:00Z" },
+        error: null,
+      });
+    }
+    return mockChain({ data: null, error: null });
+  });
+
+  try {
+    const result = await handler({ content: "Testing pgvector entity bridges" }, mockCtx());
+    const parsed = JSON.parse(result.content[0].text);
+    assertEquals(parsed.id, "new-thought-id");
+
+    // Verify entity bridge RPC was called (storeEntityBridges invoked)
+    assertEquals(
+      rpcCalls.includes("get_thought_entity_ids"),
+      true,
+      "storeEntityBridges should call get_thought_entity_ids after capture",
+    );
+  } finally {
+    restore(supabaseAdmin);
+    globalThis.fetch = origFetch;
+  }
+});

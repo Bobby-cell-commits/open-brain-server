@@ -48,7 +48,9 @@ Return JSON with:
 
 - "relevance": one sentence — why is this thought worth remembering? Not a summary. A reason to care.
 
-- "theme": exactly one of: "ai-coding-tools", "ml-research", "knowledge-systems", "infrastructure", "developer-experience", "side-projects", "industry-trends", "personal"
+- "theme": exactly one of: "ai-coding-tools", "ml-research", "knowledge-systems", "infrastructure", "developer-experience", "industry-trends", "hardware-systems", "tech-economics", "security", "scientific-computing", "regulation-policy"
+
+- "activity": exactly one of: "research-paper", "community-discussion", "project-showcase", "announcement", "industry-report", "opinion", "career-personal", "tutorial"
 
 - "topics": array of 2-3 specific topic tags, lowercase hyphenated.
   Tags should be specific enough that searching for one returns a focused set, not half the database.

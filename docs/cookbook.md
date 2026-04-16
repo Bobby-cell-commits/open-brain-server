@@ -5,20 +5,20 @@ paths:
 
 # Open Brain MCP Cookbook
 
-How to use the 16 MCP tools effectively — patterns, compositions, and non-obvious behaviors.
+How to use the 17 MCP tools effectively — patterns, compositions, and non-obvious behaviors.
 
 ## Quick Reference
 
 | Tool | Purpose | Key Params |
 |------|---------|------------|
-| `search_thoughts` | Hybrid search (vector + keyword) | `query`, `limit=10`, `threshold=0.7`, `min_quality=0.4`, `expand=false` |
-| `list_thoughts` | Browse with filters, salience-ordered | `type`, `topic`, `person`, `theme`, `min_quality=0.4`, `days`, `limit=20` |
+| `search_thoughts` | Hybrid search (vector + keyword) | `query`, `limit=10`, `threshold=0.7`, `min_quality=0.4`, `expand=false`, `source` |
+| `list_thoughts` | Browse with filters, salience-ordered | `type`, `topic`, `person`, `theme`, `activity`, `min_quality=0.4`, `days`, `limit=20` |
 | `capture_thought` | Store with auto-embed, auto-link, entity extraction | `content`, `source="mcp"` |
 | `thought_stats` | Aggregate counts, type/theme breakdown, top topics/people | `days` (optional) |
 | `get_connections` | Graph traversal from a thought (typed links) | `thought_id` |
 | `list_entities` | Browse extracted entities by frequency | `entity_type`, `min_thoughts=1`, `limit=20` |
 | `weekly_review` | LLM synthesis of recent themes, open loops, next steps | `days=7` |
-| `analyze` | Graph analysis: hubs, density, sources, co_occurrence, themes | `type` (required), `min_connections=5` (hubs), `theme` (themes mode) |
+| `analyze` | Graph analysis: hubs, density, sources, co_occurrence, themes, synthesis_candidates | `type` (required), `min_connections=5` (hubs), `theme` (themes mode) |
 | `dedup_review` | Duplicate candidates + zone histogram | `limit=20` |
 | `refresh_salience` | Recompute all salience scores | (none) |
 | `update_thought` | Rewrite content (re-embeds, re-extracts metadata) | `id`, `content` |
@@ -27,6 +27,7 @@ How to use the 16 MCP tools effectively — patterns, compositions, and non-obvi
 | `pipeline` | Pipeline monitoring: health, runs, merges | `type` (required), `days=7`, `source`, `merge_type` |
 | `migration_guide` | Import runbook for external platforms | `platform` |
 | `review_stale` | Review flagged stale thoughts | `action=list/approve/reject`, `thought_id` |
+| `deep_search` | Multi-hop retrieval with graph traversal + LLM refinement | `query`, `limit=20`, `threshold=0.6`, `min_quality=0.4`, `max_hops=2`, `source` |
 
 ## Explore Patterns
 
@@ -34,7 +35,7 @@ How to use the 16 MCP tools effectively — patterns, compositions, and non-obvi
 Start with `thought_stats()` for the lay of the land — total count, type/theme breakdown, top topics and people. Add `days=7` or `days=30` to scope to recent activity.
 
 **"What am I paying attention to?"**
-`thought_stats(days=7)` → look at the `by_theme` breakdown. Themes are a controlled vocabulary (8 values), so this is a reliable attention map. Compare against `thought_stats(days=30)` to spot shifts.
+`thought_stats(days=7)` → look at the `by_theme` breakdown. Themes are a controlled vocabulary (11 domain values), activities are 8 content-type labels. Compare against `thought_stats(days=30)` to spot shifts.
 
 **"Show me everything about X"**
 Chain filters on `list_thoughts`: `list_thoughts(theme="ml-research", min_quality=0.7, days=14)`. Filters are AND-combined — stack them to narrow precisely. Sort is always salience-first, then recency.
@@ -44,6 +45,25 @@ Chain filters on `list_thoughts`: `list_thoughts(theme="ml-research", min_qualit
 
 **"What's high quality?"**
 `list_thoughts(min_quality=0.8, days=7)` → recent high-signal content. Quality (0-1) is an LLM-assigned information density score, distinct from salience (which factors recency, access, connections).
+
+**"Search only my captures"**
+`search_thoughts("topic", source="telegram")` or `source="mcp"` → scopes retrieval to intentional captures only, excluding pipeline-ingested content. Works with `deep_search` too: `deep_search("query", source="telegram")` restricts all stages (seed search, sub-searches) to that source. Omit `source` to search everything (default).
+
+## Deep Search Patterns
+
+**"Bridge across topics"**
+`deep_search("how does X relate to Y")` — the core use case. The tool searches for X, traverses the graph to find connected thoughts, then uses LLM gap-filling to generate sub-queries targeting the bridge between X and Y.
+
+**"What am I missing?"**
+When `search_thoughts` returns `low_confidence: true`, follow up with `deep_search` using the same query. The multi-hop traversal and LLM refinement often surface relevant thoughts that scored below the direct search threshold.
+
+**"Multi-session synthesis"**
+`deep_search("synthesize my thinking on X")` — finds thoughts captured across different sessions. The graph traversal bridges session boundaries; the LLM generates sub-queries for facets not covered by direct hits.
+
+**When to use which:**
+- `search_thoughts` — Quick lookups, known-topic retrieval, browsing. Fast (~500ms), cheap.
+- `search_thoughts(expand=true)` — 1-hop graph neighbors included. Moderate.
+- `deep_search` — Bridging topics, multi-session synthesis, or after `low_confidence`. Slower (~2-3s) but finds what direct search misses.
 
 ## Investigate Patterns
 
@@ -84,6 +104,9 @@ If capture returns `{merged: true}`, the content was >92% similar to an existing
 **Graph health:**
 `analyze(type="density")` → connection stats at thresholds 0.70/0.75/0.80/0.85. Watch for: high `zero_link_count` (orphaned thoughts), low avg connections (sparse graph). Healthy: most thoughts have 2+ connections at 0.75 threshold.
 
+**Synthesis queue:**
+`analyze(type="synthesis_candidates")` → pending thought clusters for Dream Phase C. Shows cluster membership, sizes, dominant themes. Cached daily. Use `force=true` for live computation.
+
 **Pipeline health:**
 `pipeline(type="health")` → per-source status, last capture time, run stats, failure rates, and active alerts. `pipeline(type="runs", days=7)` → run history with capture/failure/filter counts per run. `analyze(type="sources")` → cross-source similarity and coverage overlap. The `monitor-pipeline` Edge Function handles automated Telegram alerting separately.
 
@@ -99,7 +122,7 @@ If capture returns `{merged: true}`, the content was >92% similar to an existing
 ## Theme Tracking Patterns
 
 **"How has my attention shifted?"**
-`analyze(type="themes")` → all 8 themes with velocity (thoughts/week), lifecycle state (emerging/active/mature/declining/dormant), and centroid drift. Updated weekly by dream batch.
+`analyze(type="themes")` → all 11 domain themes with velocity (thoughts/week), lifecycle state (emerging/active/mature/declining/dormant), and centroid drift. Updated weekly by dream batch.
 
 **"Show me ml-research over time"**
 `analyze(type="themes", theme="ml-research")` → weekly snapshot timeline: thought count, new captures, avg quality, velocity, centroid drift.
@@ -164,7 +187,11 @@ Watch for high `centroid_drift` (> 0.05) sustained across multiple snapshots —
 - **weekly_review caps at 100 thoughts:** For periods with >100 thoughts, it samples. Use smaller `days` windows for comprehensive reviews.
 - **Entity types are case-sensitive:** Use lowercase: "person", "project", "tool", "organization".
 - **Quality gating is on by default:** Both `search_thoughts` and `list_thoughts` filter out thoughts with quality < 0.4. Pass `min_quality=0` to disable. This prevents noise thoughts from consuming ranking slots.
-- **Threshold cheat sheet:** 0.92+ = dedup merge, 0.85-0.92 = near-miss logging, 0.80+ = typed connections, 0.75+ = connection linking, 0.70 = default search floor, 0.40 = default quality gate.
+- **Threshold cheat sheet:** 0.92+ = dedup merge, 0.85-0.92 = near-miss logging, 0.80+ = typed connections, 0.75+ = connection linking, 0.70 = default search floor, 0.40 = default quality gate. Entity-bridge IDF: 0.60+ traversed by default, <0.02 = ubiquitous entity noise (Claude Code, Anthropic).
 - **Staleness tiers:** 0.85+ = auto-archive (LLM confirms at any confidence), 0.70-0.85 = context-confirmed (LLM must say archive with high confidence), 0.40-0.70 = flagged for review (never auto-archived). Scores below 0.40 are healthy.
 - **Archived thoughts are invisible:** All search, list, stats, dedup, and analysis RPCs filter `archived_at IS NULL`. Archived thoughts still exist in the DB and can be unarchived.
 - **Sole-entity protection:** If archiving a thought would leave zero active thoughts for any of its entities, it's skipped. Prevents knowledge gaps.
+- **`deep_search` degrades gracefully:** If the LLM gap-fill step fails (timeout, parse error), the tool returns direct + graph results only — equivalent to a deeper `search_thoughts(expand=true)`. Check `search_meta.sub_queries` — if empty, the LLM either found the results comprehensive or failed.
+- **`deep_search` token budget is 8K:** Results are truncated at ~32,000 characters of accumulated content. `search_meta.truncated = true` when this fires. Lower your `limit` or raise `threshold` to get more focused results.
+- **Entity bridges are soft-weighted:** `thought_connections` with `link_type = 'entity-bridge'` use Newman-IDF weights in the `similarity` column. Ubiquitous entities (Claude Code, Anthropic) produce near-zero weight; specific entities (pgvector, Immich) produce strong bridges. `deep_graph_traversal` follows them automatically — the `p_min_similarity` filter gates weak bridges at query time.
+- **Entity bridge IDF refreshes daily:** The `refresh-graph-analysis` job recomputes all entity-bridge weights. Between refreshes, weights may be slightly stale for newly added entities.

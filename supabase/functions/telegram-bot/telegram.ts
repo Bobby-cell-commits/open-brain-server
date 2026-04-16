@@ -19,6 +19,9 @@ export function formatConfirmation(metadata: ThoughtMetadata): string {
   if (metadata.theme) {
     lines.push(`  <b>Theme:</b> ${escape(metadata.theme)}`);
   }
+  if (metadata.activity) {
+    lines.push(`  <b>Activity:</b> ${escape(metadata.activity)}`);
+  }
   if (metadata.topics?.length > 0) {
     lines.push(`  <b>Topics:</b> ${metadata.topics.map(escape).join(", ")}`);
   }

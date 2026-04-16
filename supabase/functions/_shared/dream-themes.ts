@@ -62,7 +62,8 @@ async function getThemes(brainId: string): Promise<ThemeRow[]> {
   const { data, error } = await supabaseAdmin
     .from("themes")
     .select("id, name, velocity, lifecycle_state, thought_count")
-    .eq("brain_id", brainId);
+    .eq("brain_id", brainId)
+    .neq("lifecycle_state", "archived");
 
   if (error) throw new Error(`Failed to fetch themes: ${error.message}`);
   return data ?? [];
