@@ -18,7 +18,16 @@ import { createInterface } from "node:readline";
 const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
 const MCP_ACCESS_KEY = process.env.MCP_ACCESS_KEY ?? "";
 
-const PROTOCOL_VERSION = "2026-03-26";
+// MCP spec version negotiation: respond with the client's version when we
+// support it, else fall back to a widely-supported default. mcp-proxy v6.4.3
+// (Glama's probe harness) only knows versions published up to 2025-06-18, so
+// returning anything newer hard-aborts its client.connect().
+const SUPPORTED_PROTOCOL_VERSIONS = new Set([
+  "2024-11-05",
+  "2025-03-26",
+  "2025-06-18",
+]);
+const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
 const SERVER_INFO = { name: "open-brain", version: "1.0.0" };
 
 const OBJ = { type: "object", additionalProperties: true };
@@ -83,12 +92,17 @@ async function proxyToolCall(params) {
 
 async function handle(request) {
   switch (request.method) {
-    case "initialize":
+    case "initialize": {
+      const clientVersion = request.params?.protocolVersion;
+      const negotiated = SUPPORTED_PROTOCOL_VERSIONS.has(clientVersion)
+        ? clientVersion
+        : DEFAULT_PROTOCOL_VERSION;
       return {
-        protocolVersion: PROTOCOL_VERSION,
+        protocolVersion: negotiated,
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
       };
+    }
     case "ping":
       return {};
     case "tools/list":
