@@ -4,6 +4,7 @@
     "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "npm:@supabase/supabase-js@2": "2.99.3",
+    "npm:hono@4": "4.12.14",
     "npm:mcp-lite@*": "0.10.0",
     "npm:postgres@3": "3.4.9",
     "npm:zod@3": "3.25.76"
@@ -81,6 +82,9 @@
       "dependencies": [
         "@types/node"
       ]
+    },
+    "hono@4.12.14": {
+      "integrity": "sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w=="
     },
     "iceberg-js@0.8.1": {
       "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA=="

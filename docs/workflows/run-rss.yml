@@ -8,8 +8,16 @@ on:
 jobs:
   run-rss:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        category: [rss_newsletters, rss_blogs, rss_aggregators]
     steps:
-      - name: Invoke run-pipeline Edge Function (RSS)
+      - name: Invoke run-pipeline Edge Function (${{ matrix.category }})
+        env:
+          CATEGORY: ${{ matrix.category }}
+          SUPABASE_FUNCTIONS_URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }}
+          MCP_ACCESS_KEY: ${{ secrets.MCP_ACCESS_KEY }}
         run: |
           max_attempts=3
           attempt=0
@@ -18,11 +26,11 @@ jobs:
             attempt=$((attempt + 1))
 
             response=$(curl -s -w "\n%{http_code}" -X POST \
-              "${{ secrets.SUPABASE_FUNCTIONS_URL }}/run-pipeline" \
+              "$SUPABASE_FUNCTIONS_URL/run-pipeline" \
               -H "Content-Type: application/json" \
-              -H "x-brain-key: ${{ secrets.MCP_ACCESS_KEY }}" \
+              -H "x-brain-key: $MCP_ACCESS_KEY" \
               -H "x-trigger: github_actions" \
-              -d '{"source": "rss"}' \
+              -d "{\"source\": \"$CATEGORY\"}" \
               --max-time 540)
 
             http_code=$(echo "$response" | tail -1)
@@ -32,9 +40,9 @@ jobs:
             echo "Response: $body"
 
             if [ "$http_code" = "200" ]; then
-              captured=$(echo "$body" | jq -r '.sources.rss.captured // 0')
-              failed=$(echo "$body" | jq -r '.sources.rss.failed // 0')
-              echo "::notice::RSS complete: $captured captured, $failed failed"
+              captured=$(echo "$body" | jq -r ".sources.\"$CATEGORY\".captured // 0")
+              failed=$(echo "$body" | jq -r ".sources.\"$CATEGORY\".failed // 0")
+              echo "::notice::$CATEGORY complete: $captured captured, $failed failed"
               exit 0
             fi
 
@@ -44,5 +52,5 @@ jobs:
             fi
           done
 
-          echo "::error::RSS pipeline failed after $max_attempts attempts (last status: $http_code)"
+          echo "::error::$CATEGORY pipeline failed after $max_attempts attempts (last status: $http_code)"
           exit 1

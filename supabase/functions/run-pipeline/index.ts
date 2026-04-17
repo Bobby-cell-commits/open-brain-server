@@ -19,7 +19,13 @@ const OWNER_BRAIN_ID = Deno.env.get("OWNER_BRAIN_ID") ?? "00000000-0000-4000-a00
 
 // --- Config ---
 
-const RSS_FEEDS: Record<string, string> = {
+// --- RSS Feeds split by processing profile ---
+// Each category gets its own source dispatch (`rss_newsletters`, `rss_blogs`,
+// `rss_aggregators`), invoked in parallel by a GitHub Actions matrix so each
+// invocation gets its own 150s idle-timeout budget. See
+// docs/superpowers/plans/2026-04-16-run-pipeline-rss-split.md.
+
+const RSS_NEWSLETTERS: Record<string, string> = {
   "Simon Willison": "https://simonwillison.net/atom/everything/",
   "Latent Space": "https://www.latent.space/feed",
   "The Rundown AI": "https://rss.beehiiv.com/feeds/2R3C6Bt5wj.xml",
@@ -28,6 +34,27 @@ const RSS_FEEDS: Record<string, string> = {
   "Decoding AI": "https://www.decodingai.com/feed",
   "The AI Engineer": "https://theaiengineer.substack.com/feed",
   "Turing Post": "https://turingpost.substack.com/feed",
+};
+
+const RSS_AGGREGATORS: Record<string, string> = {
+  // Triage-gated: community-moderated content, S/N varies
+  "Lobsters": "https://lobste.rs/t/ai,distributed,databases,devops,security,programming.rss",
+  "HN Frontpage": "https://hnrss.org/frontpage?points=100",
+};
+
+const RSS_BLOGS: Record<string, string> = {
+  // Individual technical blogs — curated, low-volume, high-S/N, no gating needed
+  "Marc Brooker": "https://brooker.co.za/blog/atom.xml",
+  "Julia Evans": "https://jvns.ca/atom.xml",
+  "Brendan Gregg": "https://www.brendangregg.com/blog/rss.xml",
+  "Phil Eaton": "https://notes.eatonphil.com/rss.xml",
+  "Chris Wellons": "https://nullprogram.com/feed/",
+  // 2026-04-17: re-added after 3-category split lifted the 15-feed ceiling.
+  "rachelbythebay": "https://rachelbythebay.com/w/atom.xml",
+  "Eli Bendersky": "https://eli.thegreenplace.net/feeds/all.atom.xml",
+  "Hillel Wayne": "https://www.hillelwayne.com/index.xml",
+  "Drew DeVault": "https://drewdevault.com/blog/index.xml",
+  "Filippo Valsorda": "https://words.filippo.io/rss/",
 };
 
 // --- HF Papers Config ---
@@ -635,12 +662,32 @@ function formatEmergentMindContent(paper: any, triage: TriageResult): string {
 // --- Pipeline runners ---
 
 const MAX_FIRST_RUN = 5;
+// Cap first-run cold-starts per invocation — prevents bulk feed additions from blowing
+// past Supabase's 150s idle timeout. Cold-start is ~25-30s (archive marking + 5 LLM
+// captures). One per run is the only safe ceiling when steady-state already consumes
+// ~100s on a 20-feed config. Remaining new feeds defer to the next run.
+const MAX_COLD_STARTS_PER_RUN = 1;
 
-async function processRssFeeds(): Promise<{ captured: number; skipped: number; failed: number; filtered: number }> {
+interface RssProcessOptions {
+  gateActionability: boolean;
+}
+
+async function processRssFeeds(
+  feeds: Record<string, string>,
+  options: RssProcessOptions,
+): Promise<{ captured: number; skipped: number; failed: number; filtered: number }> {
   const stats = { captured: 0, skipped: 0, failed: 0, filtered: 0 };
+  let coldStartsThisRun = 0;
 
-  for (const [feedName, feedUrl] of Object.entries(RSS_FEEDS)) {
+  for (const [feedName, feedUrl] of Object.entries(feeds)) {
     try {
+      // Gate cold-start discovery before we even fetch the feed — saves bandwidth on deferred feeds.
+      const existingCount = await feedEntryCount(feedUrl);
+      if (existingCount === 0 && coldStartsThisRun >= MAX_COLD_STARTS_PER_RUN) {
+        console.log(`Deferring cold-start for ${feedName}: per-run cap reached (${MAX_COLD_STARTS_PER_RUN}). Will process on next run.`);
+        continue;
+      }
+
       const resp = await fetch(feedUrl, {
         headers: { "User-Agent": "open-brain-pipeline/1.0" },
       });
@@ -651,19 +698,27 @@ async function processRssFeeds(): Promise<{ captured: number; skipped: number; f
       const xml = await resp.text();
       let entries = parseRssEntries(xml);
 
+      // Any feed with no prior entries counts against the per-run cap — even tiny feeds
+      // (≤MAX_FIRST_RUN entries) still pay cold-start LLM cost for each entry. Previously
+      // the counter was gated by `entries.length > MAX_FIRST_RUN`, which let small feeds
+      // bypass the cap and produced ~151s hangs when multiple small blogs were added
+      // together.
+      if (existingCount === 0) {
+        coldStartsThisRun++;
+      }
+
       // First-run protection: only process N most recent, mark rest as seen
-      const existingCount = await feedEntryCount(feedUrl);
       if (existingCount === 0 && entries.length > MAX_FIRST_RUN) {
         console.log(`First run for ${feedName}: processing ${MAX_FIRST_RUN} most recent, marking ${entries.length - MAX_FIRST_RUN} as seen`);
         for (const entry of entries.slice(MAX_FIRST_RUN)) {
-          const entryId = entry.guid || entry.link || `${feedUrl}|${entry.title}`;
+          const entryId = canonicalEntryId(feedUrl, entry);
           await markProcessed(entryId, `rss-${feedName}-skipped`, feedUrl);
         }
         entries = entries.slice(0, MAX_FIRST_RUN);
       }
 
       for (const entry of entries.slice(0, 10)) {
-        const entryId = entry.guid || entry.link || `${feedUrl}|${entry.title}`;
+        const entryId = canonicalEntryId(feedUrl, entry);
 
         if (await isProcessed(entryId)) { stats.skipped++; continue; }
 
@@ -675,6 +730,19 @@ async function processRssFeeds(): Promise<{ captured: number; skipped: number; f
             combinedTriageAndExtract(rawInput),
             generateEmbedding(rawInput),
           ]);
+
+          // Actionability gate — mirror HF Papers / Emergent Mind. Critical for community
+          // aggregators (HN, Lobsters) where unfiltered signal-to-noise is low.
+          // Skipped for curated categories (newsletters, blogs) — saves an LLM call per
+          // item and the gate was already a no-op on vetted sources.
+          if (options.gateActionability) {
+            const actionability = combined.triage.actionability;
+            if (actionability === "low" || actionability === "archive") {
+              await markProcessed(entryId, "rss-filtered", feedUrl);
+              stats.filtered++;
+              continue;
+            }
+          }
 
           const enriched = formatRssContent(feedName, entry, combined.triage);
           const result = await captureThought(enriched, "rss", entryId, {
@@ -876,6 +944,24 @@ interface RssEntry {
   pubDate?: string;
 }
 
+// Community aggregators (HN, Lobsters) can expose the same story under multiple feed URLs
+// as tag combos or point thresholds shift. Extract stable item IDs so dedup catches repeats
+// via `pipeline_processed` before we burn an embedding + triage call. Mirrors the HF↔EM
+// arXiv cross-dedup pattern (`wasCaptured`) for URL-based ID matching at ingest time.
+function canonicalEntryId(feedUrl: string, entry: RssEntry): string {
+  if (feedUrl.includes("hnrss.org") || feedUrl.includes("news.ycombinator.com")) {
+    const source = entry.guid || entry.link || "";
+    const match = source.match(/[?&]id=(\d+)/);
+    if (match) return `hn_${match[1]}`;
+  }
+  if (feedUrl.includes("lobste.rs")) {
+    const source = entry.guid || entry.link || "";
+    const match = source.match(/\/s\/([a-z0-9]+)/i);
+    if (match) return `lobsters_${match[1]}`;
+  }
+  return entry.guid || entry.link || `${feedUrl}|${entry.title}`;
+}
+
 function parseRssEntries(xml: string): RssEntry[] {
   const entries: RssEntry[] = [];
 
@@ -988,7 +1074,7 @@ Deno.serve(async (req) => {
   }
 
   const sources: Record<string, any> = {};
-  const validSources = ["rss", "hf_papers", "emergent_mind", "all", "none"];
+  const validSources = ["rss", "rss_newsletters", "rss_blogs", "rss_aggregators", "hf_papers", "emergent_mind", "all", "none"];
   if (!validSources.includes(source)) {
     return errorResponse(`Invalid source: "${source}". Valid: ${validSources.join(", ")}`, 400);
   }
@@ -997,13 +1083,33 @@ Deno.serve(async (req) => {
   let totalFailed = 0;
   const warnings: string[] = [];
 
-  if (source === "rss" || source === "all") {
+  if (source === "rss_newsletters" || source === "rss" || source === "all") {
     try {
-      sources.rss = await processRssFeeds();
-      totalCaptured += sources.rss.captured;
-      totalFailed += sources.rss.failed;
+      sources.rss_newsletters = await processRssFeeds(RSS_NEWSLETTERS, { gateActionability: false });
+      totalCaptured += sources.rss_newsletters.captured;
+      totalFailed += sources.rss_newsletters.failed;
     } catch (e) {
-      sources.rss_error = e instanceof Error ? e.message : String(e);
+      sources.rss_newsletters_error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  if (source === "rss_blogs" || source === "rss" || source === "all") {
+    try {
+      sources.rss_blogs = await processRssFeeds(RSS_BLOGS, { gateActionability: false });
+      totalCaptured += sources.rss_blogs.captured;
+      totalFailed += sources.rss_blogs.failed;
+    } catch (e) {
+      sources.rss_blogs_error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  if (source === "rss_aggregators" || source === "rss" || source === "all") {
+    try {
+      sources.rss_aggregators = await processRssFeeds(RSS_AGGREGATORS, { gateActionability: true });
+      totalCaptured += sources.rss_aggregators.captured;
+      totalFailed += sources.rss_aggregators.failed;
+    } catch (e) {
+      sources.rss_aggregators_error = e instanceof Error ? e.message : String(e);
     }
   }
 

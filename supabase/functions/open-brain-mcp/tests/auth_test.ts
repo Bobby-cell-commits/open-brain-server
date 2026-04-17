@@ -36,6 +36,38 @@ Deno.test("extractKeyFromRequest gets key from x-brain-key header", () => {
   assertEquals(extractKeyFromRequest(req), "header-key");
 });
 
+Deno.test("extractKeyFromRequest gets key from Authorization Bearer header", () => {
+  const req = new Request("http://localhost/open-brain-mcp/mcp", {
+    method: "POST",
+    headers: { "Authorization": "Bearer bearer-key-123" },
+  });
+  assertEquals(extractKeyFromRequest(req), "bearer-key-123");
+});
+
+Deno.test("extractKeyFromRequest Bearer header takes precedence over path segment", () => {
+  const req = new Request("http://localhost/open-brain-mcp/path-key/mcp", {
+    method: "POST",
+    headers: { "Authorization": "Bearer bearer-key-456" },
+  });
+  assertEquals(extractKeyFromRequest(req), "bearer-key-456");
+});
+
+Deno.test("extractKeyFromRequest handles lowercase 'bearer' scheme", () => {
+  const req = new Request("http://localhost/open-brain-mcp/mcp", {
+    method: "POST",
+    headers: { "Authorization": "bearer lower-key" },
+  });
+  assertEquals(extractKeyFromRequest(req), "lower-key");
+});
+
+Deno.test("extractKeyFromRequest ignores non-Bearer Authorization schemes", () => {
+  const req = new Request("http://localhost/open-brain-mcp/path-key/mcp", {
+    method: "POST",
+    headers: { "Authorization": "Basic dXNlcjpwYXNz" },
+  });
+  assertEquals(extractKeyFromRequest(req), "path-key");
+});
+
 Deno.test("extractKeyFromRequest gets key from query param", () => {
   const req = new Request("http://localhost/open-brain-mcp/mcp?key=query-key", { method: "POST" });
   assertEquals(extractKeyFromRequest(req), "query-key");

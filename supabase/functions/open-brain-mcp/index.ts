@@ -35,6 +35,62 @@ import { registerAdminRoutes } from "./admin-routes.ts";
 const app = new Hono();
 
 // ---------------------------------------------------------------------------
+// Public server card — registry discovery (Smithery, Glama, mcpservers.org)
+// ---------------------------------------------------------------------------
+
+const SERVER_CARD = {
+  schema_version: "0.1",
+  name: "open-brain",
+  version: "1.0.0",
+  description:
+    "Personal knowledge infrastructure with structured memory: hybrid search + multi-hop graph retrieval, automatic entity extraction, Newman-IDF weighted entity bridges, theme tracking, staleness pruning, and insight synthesis. 37.2% LongMemEval baseline.",
+  homepage: "https://github.com/Bobby-cell-commits/open-brain-server",
+  repository: "https://github.com/Bobby-cell-commits/open-brain-server",
+  license: "MIT",
+  protocolVersion: "2026-03-26",
+  capabilities: {
+    tools: { listChanged: false },
+    prompts: null,
+    resources: null,
+    sampling: null,
+    logging: null,
+  },
+  auth: {
+    type: "bearer",
+    header: "Authorization",
+    scheme: "Bearer",
+    description:
+      "Pass your brain API key as 'Authorization: Bearer <key>'. Legacy 'x-brain-key' header and path-segment auth also supported.",
+  },
+  tools: [
+    { name: "search_thoughts", description: "Hybrid search (BM25 + vector with RRF). Supports source filter, 1-hop graph expansion, quality gating." },
+    { name: "deep_search", description: "Multi-hop retrieval with graph traversal + LLM gap-filling sub-queries. Best for bridging topics and multi-session synthesis." },
+    { name: "list_thoughts", description: "Browse thoughts with salience-ordered filters (type, theme, topic, person, activity, days, min_quality)." },
+    { name: "thought_stats", description: "Aggregate counts with type/theme breakdown, top topics, people, and activity." },
+    { name: "capture_thought", description: "Store a thought with auto-embedding, auto-linking, entity extraction, and semantic dedup merge." },
+    { name: "delete_thought", description: "Permanently delete a thought (cascades connections)." },
+    { name: "update_thought", description: "Rewrite a thought's content (re-embeds, re-extracts metadata)." },
+    { name: "weekly_review", description: "LLM synthesis of recent themes, open loops, and suggested next steps." },
+    { name: "migration_guide", description: "Import runbook for external platforms (Notion, Obsidian, Readwise, etc.)." },
+    { name: "get_connections", description: "Graph traversal from a thought via typed links (extends, contradicts, is-evidence-for, etc.)." },
+    { name: "analyze", description: "Graph analysis: hubs, density, sources, co_occurrence, themes, synthesis_candidates." },
+    { name: "dedup_review", description: "Duplicate candidate pairs with similarity zone histogram." },
+    { name: "refresh_salience", description: "Recompute salience scores (recency × access × links × merges × source)." },
+    { name: "list_entities", description: "Browse extracted entities (person, project, tool, organization) by frequency." },
+    { name: "serendipity_digest", description: "Resurface forgotten high-quality thoughts across rediscovery/orphan/underrepresented/echo slots." },
+    { name: "pipeline", description: "Pipeline monitoring: health, runs, merges." },
+    { name: "review_stale", description: "Review flagged stale thoughts (list/approve/reject)." },
+  ],
+};
+
+function handleServerCard(c: any) {
+  return c.json(SERVER_CARD);
+}
+
+app.get("/.well-known/mcp/server-card.json", handleServerCard);
+app.get("/open-brain-mcp/.well-known/mcp/server-card.json", handleServerCard);
+
+// ---------------------------------------------------------------------------
 // Auth middleware — resolves API key to brain_id via database lookup
 // ---------------------------------------------------------------------------
 

@@ -36,7 +36,7 @@ interface Alert {
 
 function sourceStatus(health: SourceHealth): "healthy" | "warning" | "critical" {
   if (health.hours_since_capture !== null) {
-    const threshold = (health.source === "reddit" || health.source === "rss") ? 48 : 72;
+    const threshold = (health.source === "reddit" || health.source.startsWith("rss")) ? 48 : 72;
     if (health.hours_since_capture > threshold * 2) return "critical";
     if (health.hours_since_capture > threshold) return "warning";
   }

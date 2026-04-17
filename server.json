@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Bobby-cell-commits/open-brain",
   "title": "Open Brain",
-  "description": "Graph-structured MCP memory server. 37.2% LongMemEval baseline, automated dedup/theme/synthesis/decay cycle. Self-hostable.",
-  "version": "1.0.0",
+  "description": "Graph-structured MCP memory server. 37.2% LongMemEval. Auto dedup, themes, decay, synthesis.",
+  "version": "1.1.0",
   "repository": {
     "url": "https://github.com/Bobby-cell-commits/open-brain-server",
     "source": "github"
@@ -11,7 +11,13 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://{supabase_project_ref}.supabase.co/functions/v1/open-brain-mcp/{api_key}/mcp",
+      "url": "https://{supabase_project_ref}.supabase.co/functions/v1/open-brain-mcp/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {api_key}"
+        }
+      ],
       "variables": {
         "supabase_project_ref": {
           "description": "Your Supabase project reference ID",

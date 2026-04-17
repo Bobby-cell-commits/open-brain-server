@@ -11,6 +11,14 @@ export async function hashKey(key: string): Promise<string> {
 
 export function extractKeyFromRequest(req: Request): string | undefined {
   const url = new URL(req.url);
+
+  // Authorization: Bearer <key> — standard MCP/OAuth header, preferred by registry scanners
+  const authHeader = req.headers.get("authorization");
+  if (authHeader) {
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (match) return match[1].trim();
+  }
+
   const pathSegments = url.pathname.split("/").filter(Boolean);
   const pathKey = pathSegments.length >= 2 && pathSegments[0] === "open-brain-mcp"
     ? pathSegments[1] === "mcp" ? undefined : pathSegments[1]

@@ -1,0 +1,53 @@
+# Belt-and-suspenders — Dockerfile only COPYs specific paths, but this
+# prevents accidental exposure if a future edit switches to `COPY . .`.
+
+.git
+.gitignore
+.github
+.claude
+.planning
+.vscode
+.venv
+node_modules
+
+# Secrets and env files
+*.env
+*.env.*
+.env
+.env.local
+.env.example
+openbrain/.env*
+pipeline/.env*
+
+# Docs and research (not needed at runtime)
+docs
+research
+discoveries
+benchmark
+poc
+pocs
+*.md
+!supabase/functions/open-brain-mcp/README.md
+
+# Pipeline (Python, separate from Edge Functions)
+pipeline
+scripts
+
+# Full self-hosted stack (separate Dockerfile path)
+docker
+
+# Other Edge Functions — not needed for the MCP listing
+supabase/functions/telegram-bot
+supabase/functions/run-pipeline
+supabase/functions/monitor-pipeline
+supabase/functions/refresh-graph-analysis
+
+# SQL migrations + reference SQL
+openbrain/supabase/migrations
+openbrain/sql
+
+# Images, binaries, local data
+*.png
+*.jpg
+*.jpeg
+data
